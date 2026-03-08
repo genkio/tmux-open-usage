@@ -140,6 +140,14 @@ def read_json_file(path: Path) -> Any:
         return None
 
 
+def is_file_fresh(path: Path, ttl_seconds: int) -> bool:
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return False
+    return age < ttl_seconds
+
+
 def keychain_read_json(service: str) -> Any:
     try:
         result = subprocess.run(
@@ -334,6 +342,8 @@ def normalize_claude_usage(data: Any) -> dict[str, Any] | None:
 
 
 def load_shared_claude_usage() -> dict[str, Any] | None:
+    if not is_file_fresh(CLAUDE_SHARED_CACHE_PATH, refresh_interval_seconds()):
+        return None
     return normalize_claude_usage(read_json_file(CLAUDE_SHARED_CACHE_PATH))
 
 
@@ -566,21 +576,11 @@ def load_cached_status(provider: str) -> dict[str, Any] | None:
 
 
 def cache_is_fresh(provider: str) -> bool:
-    path = cache_path(provider)
-    try:
-        age = time.time() - path.stat().st_mtime
-    except OSError:
-        return False
-    return age < refresh_interval_seconds()
+    return is_file_fresh(cache_path(provider), refresh_interval_seconds())
 
 
 def lock_is_active(provider: str) -> bool:
-    path = lock_path(provider)
-    try:
-        age = time.time() - path.stat().st_mtime
-    except OSError:
-        return False
-    return age < LOCK_TTL_SECONDS
+    return is_file_fresh(lock_path(provider), LOCK_TTL_SECONDS)
 
 
 def write_lock(provider: str) -> None:

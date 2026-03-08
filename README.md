@@ -36,10 +36,10 @@ Example breakdown:
 
 ## How it works
 
-- TPM runs [`tmux-open-usage.tmux`](./tmux-open-usage.tmux), removes any old second-row plugin state, restores a one-line status bar, and injects the usage command into `status-right`.
+- TPM runs [`tmux-open-usage.tmux`](./tmux-open-usage.tmux), removes any old second-row plugin state left by earlier versions of this plugin, and injects the usage command into `status-right`.
 - The status command uses a 5-minute cache in `~/Library/Caches/tmux-open-usage` by default.
 - Claude Code data comes from the same OAuth usage endpoint your statusline script uses.
-- If direct Claude auth lookup is unavailable, the plugin can fall back to the shared Claude usage cache at `/tmp/claude_usage_cache.json`.
+- If direct Claude auth lookup is unavailable, the plugin can fall back to a fresh shared Claude usage cache at `/tmp/claude_usage_cache.json`.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
 - Reset times are rendered in the machine's local timezone.
 - If Python is unavailable, the status segment shows `tmux-open-usage: install python3`.
@@ -49,6 +49,7 @@ Example breakdown:
 
 If a provider cannot be read or refreshed, the plugin falls back to stale cache.
 If a configured provider still cannot be rendered, its slot becomes `-/-`.
+The plugin preserves the user's existing tmux status height, except for the exact old two-line plugin migration case.
 
 ## Config
 

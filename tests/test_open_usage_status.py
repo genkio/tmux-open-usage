@@ -44,7 +44,10 @@ class OpenUsageStatusTests(unittest.TestCase):
             "five_hour": {"utilization": 1, "resets_at": "2026-03-08T14:00:00Z"},
             "seven_day": {"utilization": 7, "resets_at": "2026-03-13T04:00:00Z"},
         }
-        with mock.patch.object(MODULE, "read_json_file", return_value=payload):
+        with (
+            mock.patch.object(MODULE, "is_file_fresh", return_value=True),
+            mock.patch.object(MODULE, "read_json_file", return_value=payload),
+        ):
             self.assertEqual(
                 MODULE.load_shared_claude_usage(),
                 {
@@ -53,6 +56,10 @@ class OpenUsageStatusTests(unittest.TestCase):
                     "weekly": {"pct": 7, "reset_at": "2026-03-13T04:00:00Z"},
                 },
             )
+
+    def test_load_shared_claude_usage_ignores_stale_cache(self) -> None:
+        with mock.patch.object(MODULE, "is_file_fresh", return_value=False):
+            self.assertIsNone(MODULE.load_shared_claude_usage())
 
     def test_fetch_claude_status_falls_back_to_shared_cache_without_credentials(self) -> None:
         fallback = {

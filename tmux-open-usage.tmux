@@ -9,6 +9,7 @@ fi
 CURRENT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)"
 RAW_STATUS_COMMAND="#($CURRENT_DIR/scripts/open_usage_status.sh)"
 STATUS_COMMAND="#[fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]"
+OLD_SECOND_ROW_FORMAT="#[align=left,none,fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]"
 
 trim_whitespace() {
   local value="$1"
@@ -26,13 +27,12 @@ if [[ "$clean_status_right" != "$status_right_value" ]]; then
 fi
 
 second_row_format="$(tmux show-option -gqv 'status-format[1]')"
-if [[ "$second_row_format" == "#[align=left,none,fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]" ]]; then
-  tmux set-option -gq 'status-format[1]' ''
-fi
-
 status_value="$(tmux show-option -gqv status)"
-if [[ "$status_value" != "off" ]]; then
-  tmux set-option -gq status on
+if [[ "$second_row_format" == "$OLD_SECOND_ROW_FORMAT" ]]; then
+  tmux set-option -gq 'status-format[1]' ''
+  if [[ "$status_value" == "2" ]]; then
+    tmux set-option -gq status on
+  fi
 fi
 
 status_right_value="$(tmux show-option -gqv status-right)"
