@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+SCRIPT_DIR="${SCRIPT_PATH%/*}"
+if [[ "$SCRIPT_DIR" == "$SCRIPT_PATH" ]]; then
+  SCRIPT_DIR="."
+fi
+
+CURRENT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)"
+RAW_STATUS_COMMAND="#($CURRENT_DIR/scripts/open_usage_status.sh)"
+STATUS_COMMAND="#[fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+status_right_value="$(tmux show-option -gqv status-right)"
+clean_status_right="$(trim_whitespace "${status_right_value//$STATUS_COMMAND/}")"
+clean_status_right="$(trim_whitespace "${clean_status_right//$RAW_STATUS_COMMAND/}")"
+
+if [[ "$clean_status_right" != "$status_right_value" ]]; then
+  tmux set-option -gq status-right "$clean_status_right"
+fi
+
+second_row_format="$(tmux show-option -gqv 'status-format[1]')"
+if [[ "$second_row_format" == "#[align=left,none,fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]" ]]; then
+  tmux set-option -gq 'status-format[1]' ''
+fi
+
+status_value="$(tmux show-option -gqv status)"
+if [[ "$status_value" != "off" ]]; then
+  tmux set-option -gq status on
+fi
+
+status_right_value="$(tmux show-option -gqv status-right)"
+if [[ "$status_right_value" != *"$RAW_STATUS_COMMAND"* ]]; then
+  if [[ -n "$status_right_value" ]]; then
+    tmux set-option -gq status-right "$status_right_value $STATUS_COMMAND"
+  else
+    tmux set-option -gq status-right "$STATUS_COMMAND"
+  fi
+fi
