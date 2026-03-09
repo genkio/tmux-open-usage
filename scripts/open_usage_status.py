@@ -17,6 +17,7 @@ from urllib import error, parse, request
 LOCK_TTL_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 8
 DEFAULT_REFRESH_INTERVAL_MINUTES = 5
+CLAUDE_SHARED_CACHE_MAX_AGE_SECONDS = 24 * 60 * 60
 
 CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
 CLAUDE_STATE_PATHS = [
@@ -376,7 +377,7 @@ def normalize_claude_usage(data: Any) -> dict[str, Any] | None:
 
 
 def load_shared_claude_usage() -> dict[str, Any] | None:
-    if not is_file_fresh(CLAUDE_SHARED_CACHE_PATH, refresh_interval_seconds()):
+    if not is_file_fresh(CLAUDE_SHARED_CACHE_PATH, CLAUDE_SHARED_CACHE_MAX_AGE_SECONDS):
         return None
     return normalize_claude_usage(read_json_file(CLAUDE_SHARED_CACHE_PATH))
 

@@ -61,6 +61,11 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.object(MODULE, "is_file_fresh", return_value=False):
             self.assertIsNone(MODULE.load_shared_claude_usage())
 
+    def test_load_shared_claude_usage_uses_dedicated_max_age(self) -> None:
+        with mock.patch.object(MODULE, "is_file_fresh", return_value=False) as mocked:
+            MODULE.load_shared_claude_usage()
+            mocked.assert_called_once_with(MODULE.CLAUDE_SHARED_CACHE_PATH, MODULE.CLAUDE_SHARED_CACHE_MAX_AGE_SECONDS)
+
     def test_fetch_claude_status_falls_back_to_shared_cache_without_credentials(self) -> None:
         fallback = {
             "provider": "claude",
