@@ -366,7 +366,11 @@ def normalize_claude_usage(data: Any) -> dict[str, Any] | None:
     weekly_reset = weekly.get("resets_at")
     if session_pct is None or weekly_pct is None:
         return None
-    if parse_iso_datetime(session_reset) is None or parse_iso_datetime(weekly_reset) is None:
+    if session_reset is not None and parse_iso_datetime(session_reset) is None:
+        session_reset = None
+    if weekly_reset is not None and parse_iso_datetime(weekly_reset) is None:
+        weekly_reset = None
+    if session_reset is None and weekly_reset is None:
         return None
 
     return {
@@ -727,7 +731,7 @@ def to_local_time(value: Any, now: datetime | None = None) -> datetime | None:
 def format_short_reset_clock(reset_at: Any, now: datetime | None = None) -> str:
     local_target = to_local_time(reset_at, now=now)
     if local_target is None:
-        return "?"
+        return "-"
     rounded = local_target + timedelta(minutes=30)
     rounded = rounded.replace(minute=0, second=0, microsecond=0)
     hour = rounded.strftime("%I").lstrip("0") or "12"
@@ -738,7 +742,7 @@ def format_short_reset_clock(reset_at: Any, now: datetime | None = None) -> str:
 def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
     local_target = to_local_time(reset_at, now=now)
     if local_target is None:
-        return "?d"
+        return "-"
     if now is None:
         current = datetime.now(local_target.tzinfo)
     elif now.tzinfo is None:

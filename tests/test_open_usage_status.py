@@ -39,6 +39,20 @@ class OpenUsageStatusTests(unittest.TestCase):
             },
         )
 
+    def test_normalize_claude_usage_accepts_missing_session_reset(self) -> None:
+        payload = {
+            "five_hour": {"utilization": 0, "resets_at": None},
+            "seven_day": {"utilization": 17, "resets_at": "2026-03-14T06:00:00.507675+00:00"},
+        }
+        self.assertEqual(
+            MODULE.normalize_claude_usage(payload),
+            {
+                "provider": "claude",
+                "session": {"pct": 0, "reset_at": None},
+                "weekly": {"pct": 17, "reset_at": "2026-03-14T06:00:00.507675+00:00"},
+            },
+        )
+
     def test_load_shared_claude_usage(self) -> None:
         payload = {
             "five_hour": {"utilization": 1, "resets_at": "2026-03-08T14:00:00Z"},
@@ -150,9 +164,15 @@ class OpenUsageStatusTests(unittest.TestCase):
         now = datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)
         self.assertEqual(MODULE.format_short_reset_clock("2026-03-08T15:20:00Z", now=now), "3p")
 
+    def test_format_short_reset_clock_handles_missing_reset(self) -> None:
+        self.assertEqual(MODULE.format_short_reset_clock(None), "-")
+
     def test_format_days_until_reset(self) -> None:
         now = datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)
         self.assertEqual(MODULE.format_days_until_reset("2026-03-10T15:20:00Z", now=now), "3d")
+
+    def test_format_days_until_reset_handles_missing_reset(self) -> None:
+        self.assertEqual(MODULE.format_days_until_reset(None), "-")
 
     def test_refresh_interval_seconds_defaults_to_five_minutes(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {}, clear=False):
@@ -231,6 +251,17 @@ class OpenUsageStatusTests(unittest.TestCase):
             now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
         )
         self.assertEqual(segment, "91%3p/69%3d")
+
+    def test_render_provider_segment_handles_missing_session_reset(self) -> None:
+        segment = MODULE.render_provider_segment(
+            "claude",
+            {
+                "session": {"pct": 0, "reset_at": None},
+                "weekly": {"pct": 17, "reset_at": "2026-03-14T06:00:00.507675+00:00"},
+            },
+            now=datetime(2026, 3, 9, 0, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(segment, "100%-/83%6d")
 
 
 if __name__ == "__main__":
