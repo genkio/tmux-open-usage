@@ -73,6 +73,50 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(MODULE.fetch_claude_status(), fallback)
 
+    def test_load_claude_credentials_supports_env_oauth_token(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {
+                "CLAUDE_CODE_OAUTH_TOKEN": "token-123",
+                "CLAUDE_CODE_OAUTH_REFRESH_TOKEN": "refresh-456",
+                "CLAUDE_CODE_OAUTH_SCOPES": "user:profile user:inference",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                MODULE.load_claude_credentials(),
+                {
+                    "source": "env",
+                    "payload": {
+                        "claudeAiOauth": {
+                            "accessToken": "token-123",
+                            "refreshToken": "refresh-456",
+                            "scopes": ["user:profile", "user:inference"],
+                        }
+                    },
+                },
+            )
+
+    def test_load_claude_credentials_supports_claude_json_state_file(self) -> None:
+        payload = {"claudeAiOauth": {"accessToken": "token-123"}}
+
+        def fake_read_json_file(path):
+            if path == MODULE.CLAUDE_CREDENTIALS_PATH:
+                return None
+            if path == MODULE.CLAUDE_STATE_PATHS[0]:
+                return payload
+            return None
+
+        with (
+            mock.patch.dict(MODULE.os.environ, {"CLAUDE_CODE_OAUTH_TOKEN": ""}, clear=False),
+            mock.patch.object(MODULE, "read_json_file", side_effect=fake_read_json_file),
+            mock.patch.object(MODULE, "keychain_read_json", return_value=None),
+        ):
+            self.assertEqual(
+                MODULE.load_claude_credentials(),
+                {"source": "file", "path": MODULE.CLAUDE_STATE_PATHS[0], "payload": payload},
+            )
+
     def test_normalize_codex_usage_prefers_headers(self) -> None:
         payload = {
             "rate_limit": {

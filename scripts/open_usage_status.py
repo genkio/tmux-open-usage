@@ -19,6 +19,12 @@ HTTP_TIMEOUT_SECONDS = 8
 DEFAULT_REFRESH_INTERVAL_MINUTES = 5
 
 CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
+CLAUDE_STATE_PATHS = [
+    Path.home() / ".claude.json",
+    Path.home() / ".claude-local-oauth.json",
+    Path.home() / ".claude-staging-oauth.json",
+    Path.home() / ".claude-custom-oauth.json",
+]
 CLAUDE_SHARED_CACHE_PATH = Path("/tmp/claude_usage_cache.json")
 CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials"
 CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -181,6 +187,13 @@ def keychain_write_json(service: str, payload: Any) -> None:
     )
 
 
+def parse_oauth_scopes(raw: str | None) -> list[str] | None:
+    if not raw:
+        return None
+    scopes = [scope for scope in raw.replace(",", " ").split() if scope]
+    return scopes or None
+
+
 def http_request(
     method: str,
     url: str,
@@ -239,11 +252,30 @@ def is_auth_status(status: int) -> bool:
 
 
 def load_claude_credentials() -> dict[str, Any] | None:
+    env_access_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if env_access_token:
+        oauth: dict[str, Any] = {"accessToken": env_access_token}
+        env_refresh_token = os.environ.get("CLAUDE_CODE_OAUTH_REFRESH_TOKEN")
+        if env_refresh_token:
+            oauth["refreshToken"] = env_refresh_token
+        env_scopes = parse_oauth_scopes(os.environ.get("CLAUDE_CODE_OAUTH_SCOPES"))
+        if env_scopes:
+            oauth["scopes"] = env_scopes
+        return {"source": "env", "payload": {"claudeAiOauth": oauth}}
+
     file_payload = read_json_file(CLAUDE_CREDENTIALS_PATH)
     if isinstance(file_payload, dict):
         oauth = file_payload.get("claudeAiOauth")
         if isinstance(oauth, dict) and oauth.get("accessToken"):
             return {"source": "file", "path": CLAUDE_CREDENTIALS_PATH, "payload": file_payload}
+
+    for state_path in CLAUDE_STATE_PATHS:
+        state_payload = read_json_file(state_path)
+        if not isinstance(state_payload, dict):
+            continue
+        oauth = state_payload.get("claudeAiOauth")
+        if isinstance(oauth, dict) and oauth.get("accessToken"):
+            return {"source": "file", "path": state_path, "payload": state_payload}
 
     keychain_payload = keychain_read_json(CLAUDE_KEYCHAIN_SERVICE)
     if isinstance(keychain_payload, dict):
@@ -256,6 +288,8 @@ def load_claude_credentials() -> dict[str, Any] | None:
 
 def save_claude_credentials(state: dict[str, Any]) -> None:
     payload = state["payload"]
+    if state["source"] == "env":
+        return
     if state["source"] == "file":
         atomic_write_text(Path(state["path"]), json.dumps(payload, separators=(",", ":")), mode=0o600)
         return
