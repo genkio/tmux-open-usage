@@ -11,7 +11,7 @@ import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from urllib import error, parse, request
 
 LOCK_TTL_SECONDS = 60
@@ -44,6 +44,14 @@ CODEX_REFRESH_AGE_SECONDS = 8 * 24 * 60 * 60
 
 PROVIDERS = ("claude", "codex")
 MISSING_PROVIDER_SEGMENT = "-/-"
+FAILED_PROVIDER_FG = "red"
+STATUS_LINE_FG = "#5c5c5c"
+
+
+class FetchResult(NamedTuple):
+    data: dict[str, Any] | None = None
+    fresh: bool = False
+    failed: bool = False
 
 
 def refresh_interval_seconds() -> int:
@@ -91,6 +99,10 @@ def cache_path(provider: str) -> Path:
 
 def lock_path(provider: str) -> Path:
     return cache_dir() / f"{provider}.lock"
+
+
+def failure_path(provider: str) -> Path:
+    return cache_dir() / f"{provider}.failed"
 
 
 def parse_json_blob(text: str | bytes | None) -> Any:
@@ -386,15 +398,15 @@ def load_shared_claude_usage() -> dict[str, Any] | None:
     return normalize_claude_usage(read_json_file(CLAUDE_SHARED_CACHE_PATH))
 
 
-def fetch_claude_status() -> dict[str, Any] | None:
+def fetch_claude_status_result() -> FetchResult:
     state = load_claude_credentials()
     if not state:
-        return load_shared_claude_usage()
+        return FetchResult(load_shared_claude_usage())
 
     oauth = state["payload"]["claudeAiOauth"]
     access_token = oauth.get("accessToken")
     if not access_token:
-        return None
+        return FetchResult()
 
     if claude_needs_refresh(oauth):
         refreshed = refresh_claude_access_token(state)
@@ -412,17 +424,21 @@ def fetch_claude_status() -> dict[str, Any] | None:
     if is_auth_status(response["status"]):
         refreshed = refresh_claude_access_token(state)
         if not refreshed:
-            return load_shared_claude_usage()
+            return FetchResult(load_shared_claude_usage(), failed=True)
         headers["Authorization"] = f"Bearer {refreshed}"
         response = http_request("GET", CLAUDE_USAGE_URL, headers=headers)
 
     if response["status"] < 200 or response["status"] >= 300:
-        return load_shared_claude_usage()
+        return FetchResult(load_shared_claude_usage(), failed=True)
 
     normalized = normalize_claude_usage(parse_json_blob(response["body"]))
     if normalized:
-        return normalized
-    return load_shared_claude_usage()
+        return FetchResult(normalized, fresh=True)
+    return FetchResult(load_shared_claude_usage(), failed=True)
+
+
+def fetch_claude_status() -> dict[str, Any] | None:
+    return fetch_claude_status_result().data
 
 
 def resolve_codex_auth_paths() -> list[Path]:
@@ -557,19 +573,19 @@ def normalize_codex_usage(data: Any, headers: dict[str, str] | None = None, now:
     }
 
 
-def fetch_codex_status() -> dict[str, Any] | None:
+def fetch_codex_status_result() -> FetchResult:
     state = load_codex_auth()
     if not state:
-        return None
+        return FetchResult()
 
     payload = state["payload"]
     tokens = payload.get("tokens")
     if not isinstance(tokens, dict):
-        return None
+        return FetchResult()
 
     access_token = tokens.get("access_token")
     if not access_token:
-        return None
+        return FetchResult()
 
     if codex_needs_refresh(payload):
         refreshed = refresh_codex_access_token(state)
@@ -589,22 +605,29 @@ def fetch_codex_status() -> dict[str, Any] | None:
     if is_auth_status(response["status"]):
         refreshed = refresh_codex_access_token(state)
         if not refreshed:
-            return None
+            return FetchResult(failed=True)
         headers["Authorization"] = f"Bearer {refreshed}"
         response = http_request("GET", CODEX_USAGE_URL, headers=headers)
 
     if response["status"] < 200 or response["status"] >= 300:
-        return None
+        return FetchResult(failed=True)
 
-    return normalize_codex_usage(parse_json_blob(response["body"]), response["headers"], now_utc())
+    normalized = normalize_codex_usage(parse_json_blob(response["body"]), response["headers"], now_utc())
+    if normalized:
+        return FetchResult(normalized, fresh=True)
+    return FetchResult(failed=True)
 
 
-def fetch_provider_status(provider: str) -> dict[str, Any] | None:
+def fetch_codex_status() -> dict[str, Any] | None:
+    return fetch_codex_status_result().data
+
+
+def fetch_provider_result(provider: str) -> FetchResult:
     if provider == "claude":
-        return fetch_claude_status()
+        return fetch_claude_status_result()
     if provider == "codex":
-        return fetch_codex_status()
-    return None
+        return fetch_codex_status_result()
+    return FetchResult()
 
 
 def load_cached_status(provider: str) -> dict[str, Any] | None:
@@ -634,12 +657,29 @@ def write_cached_status(provider: str, data: dict[str, Any]) -> None:
     atomic_write_text(cache_path(provider), json.dumps(data, separators=(",", ":")))
 
 
+def mark_fetch_failure(provider: str) -> None:
+    atomic_write_text(failure_path(provider), str(int(time.time())))
+
+
+def clear_fetch_failure(provider: str) -> None:
+    failure_path(provider).unlink(missing_ok=True)
+
+
+def provider_fetch_failed(provider: str) -> bool:
+    return failure_path(provider).exists()
+
+
 def refresh_provider_cache(provider: str) -> int:
     write_lock(provider)
     try:
-        data = fetch_provider_status(provider)
-        if data:
-            write_cached_status(provider, data)
+        result = fetch_provider_result(provider)
+        if result.data:
+            write_cached_status(provider, result.data)
+        if result.fresh:
+            clear_fetch_failure(provider)
+        elif result.failed:
+            mark_fetch_failure(provider)
+        if result.data:
             return 0
         return 1
     finally:
@@ -775,6 +815,12 @@ def render_provider_segment(provider: str, data: dict[str, Any], now: datetime |
     )
 
 
+def style_provider_part(provider: str, part: str) -> str:
+    if not provider_fetch_failed(provider):
+        return part
+    return f"#[fg={FAILED_PROVIDER_FG}]{part}#[fg={STATUS_LINE_FG}]"
+
+
 def join_status_parts(parts: list[str]) -> str:
     if not parts:
         return ""
@@ -786,10 +832,10 @@ def render_status_line() -> str:
     for provider in provider_order():
         data = get_provider_status(provider)
         if not data:
-            parts.append(MISSING_PROVIDER_SEGMENT)
+            parts.append(style_provider_part(provider, MISSING_PROVIDER_SEGMENT))
             continue
         part = render_provider_segment(provider, data)
-        parts.append(part if part else MISSING_PROVIDER_SEGMENT)
+        parts.append(style_provider_part(provider, part if part else MISSING_PROVIDER_SEGMENT))
     return join_status_parts(parts)
 
 

@@ -48,6 +48,7 @@ Example breakdown:
 - On macOS, the plugin can read and refresh auth from the same files/keychain entries used by Claude Code and Codex CLI.
 
 If a provider cannot be read or refreshed, the plugin falls back to stale cache.
+If the latest fetch for a provider fails, that provider's text turns red until a later fetch for that same provider succeeds.
 If a configured provider still cannot be rendered, its slot becomes `-/-`.
 The plugin preserves the user's existing tmux status height, except for the exact old two-line plugin migration case.
 

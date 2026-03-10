@@ -1,6 +1,7 @@
 import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
+import tempfile
 from unittest import mock
 import unittest
 
@@ -91,6 +92,27 @@ class OpenUsageStatusTests(unittest.TestCase):
             mock.patch.object(MODULE, "load_shared_claude_usage", return_value=fallback),
         ):
             self.assertEqual(MODULE.fetch_claude_status(), fallback)
+
+    def test_fetch_claude_status_result_marks_failed_live_fetch_when_using_shared_cache(self) -> None:
+        fallback = {
+            "provider": "claude",
+            "session": {"pct": 1, "reset_at": "2026-03-08T14:00:00Z"},
+            "weekly": {"pct": 7, "reset_at": "2026-03-13T04:00:00Z"},
+        }
+        with (
+            mock.patch.object(
+                MODULE,
+                "load_claude_credentials",
+                return_value={"payload": {"claudeAiOauth": {"accessToken": "token-123"}}},
+            ),
+            mock.patch.object(MODULE, "claude_needs_refresh", return_value=False),
+            mock.patch.object(MODULE, "http_request", return_value={"status": 503, "headers": {}, "body": ""}),
+            mock.patch.object(MODULE, "load_shared_claude_usage", return_value=fallback),
+        ):
+            self.assertEqual(
+                MODULE.fetch_claude_status_result(),
+                MODULE.FetchResult(fallback, failed=True),
+            )
 
     def test_load_claude_credentials_supports_env_oauth_token(self) -> None:
         with mock.patch.dict(
@@ -231,6 +253,7 @@ class OpenUsageStatusTests(unittest.TestCase):
                 ],
             ),
             mock.patch.object(MODULE, "render_provider_segment", side_effect=["82%1a/55%3d", None]),
+            mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
         ):
             self.assertEqual(MODULE.render_status_line(), "[82%1a/55%3d | -/-]")
 
@@ -238,8 +261,62 @@ class OpenUsageStatusTests(unittest.TestCase):
         with (
             mock.patch.object(MODULE, "provider_order", return_value=["claude"]),
             mock.patch.object(MODULE, "get_provider_status", return_value=None),
+            mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
         ):
             self.assertEqual(MODULE.render_status_line(), "[-/-]")
+
+    def test_render_status_line_colors_failed_provider_text_red(self) -> None:
+        with (
+            mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
+            mock.patch.object(
+                MODULE,
+                "get_provider_status",
+                side_effect=[
+                    {"session": {"pct": 18, "reset_at": "2026-03-09T01:10:00Z"}, "weekly": {"pct": 45, "reset_at": "2026-03-11T09:00:00Z"}},
+                    {"session": {"pct": 77, "reset_at": "2026-03-09T10:00:00Z"}, "weekly": {"pct": 10, "reset_at": "2026-03-15T09:00:00Z"}},
+                ],
+            ),
+            mock.patch.object(MODULE, "render_provider_segment", side_effect=["82%1a/55%3d", "23%10p/90%5d"]),
+            mock.patch.object(MODULE, "provider_fetch_failed", side_effect=[True, False]),
+        ):
+            self.assertEqual(
+                MODULE.render_status_line(),
+                "[#[fg=red]82%1a/55%3d#[fg=#5c5c5c] | 23%10p/90%5d]",
+            )
+
+    def test_refresh_provider_cache_keeps_failure_flag_until_fresh_success(self) -> None:
+        fallback = {
+            "provider": "claude",
+            "session": {"pct": 1, "reset_at": "2026-03-08T14:00:00Z"},
+            "weekly": {"pct": 7, "reset_at": "2026-03-13T04:00:00Z"},
+        }
+        fresh = {
+            "provider": "claude",
+            "session": {"pct": 2, "reset_at": "2026-03-08T16:00:00Z"},
+            "weekly": {"pct": 8, "reset_at": "2026-03-14T04:00:00Z"},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_CACHE_DIR": temp_dir}, clear=False),
+                mock.patch.object(
+                    MODULE,
+                    "fetch_provider_result",
+                    side_effect=[
+                        MODULE.FetchResult(fallback, failed=True),
+                        MODULE.FetchResult(fallback),
+                        MODULE.FetchResult(fresh, fresh=True),
+                    ],
+                ),
+            ):
+                self.assertEqual(MODULE.refresh_provider_cache("claude"), 0)
+                self.assertTrue(MODULE.provider_fetch_failed("claude"))
+
+                self.assertEqual(MODULE.refresh_provider_cache("claude"), 0)
+                self.assertTrue(MODULE.provider_fetch_failed("claude"))
+
+                self.assertEqual(MODULE.refresh_provider_cache("claude"), 0)
+                self.assertFalse(MODULE.provider_fetch_failed("claude"))
+                self.assertEqual(MODULE.load_cached_status("claude"), fresh)
 
     def test_render_provider_segment(self) -> None:
         segment = MODULE.render_provider_segment(
