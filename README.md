@@ -53,6 +53,20 @@ The plugin preserves the user's existing tmux status height, except for the exac
 
 ## Config
 
+Enable or disable the plugin completely, default `on`:
+
+```tmux
+set -g @tmux_open_usage_enabled 'on'
+```
+
+To disable it:
+
+```tmux
+set -g @tmux_open_usage_enabled 'off'
+```
+
+Supported falsey values are `0`, `off`, `no`, and `false`.
+
 Refresh interval in minutes, default `5`:
 
 ```tmux
