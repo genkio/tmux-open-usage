@@ -37,7 +37,7 @@ Example breakdown:
 ## How it works
 
 - TPM runs [`tmux-open-usage.tmux`](./tmux-open-usage.tmux), removes any old second-row plugin state left by earlier versions of this plugin, and injects the usage command into `status-right`.
-- The status command uses a 5-minute cache in `~/Library/Caches/tmux-open-usage` by default.
+- The status command uses a 15-minute cache in `~/Library/Caches/tmux-open-usage` by default.
 - Claude Code data comes from the same OAuth usage endpoint your statusline script uses.
 - If direct Claude auth lookup is unavailable, the plugin can fall back to a shared Claude usage cache at `/tmp/claude_usage_cache.json` when it is recent enough.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
@@ -67,10 +67,10 @@ set -g @tmux_open_usage_enabled 'off'
 
 Supported falsey values are `0`, `off`, `no`, and `false`.
 
-Refresh interval in minutes, default `5`:
+Refresh interval in minutes, default `15`:
 
 ```tmux
-set -g @tmux_open_usage_refresh_interval_minutes '5'
+set -g @tmux_open_usage_refresh_interval_minutes '15'
 ```
 
 Use any positive integer. Reload tmux after changing it.

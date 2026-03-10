@@ -174,9 +174,9 @@ class OpenUsageStatusTests(unittest.TestCase):
     def test_format_days_until_reset_handles_missing_reset(self) -> None:
         self.assertEqual(MODULE.format_days_until_reset(None), "-")
 
-    def test_refresh_interval_seconds_defaults_to_five_minutes(self) -> None:
+    def test_refresh_interval_seconds_defaults_to_fifteen_minutes(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {}, clear=False):
-            self.assertEqual(MODULE.refresh_interval_seconds(), 300)
+            self.assertEqual(MODULE.refresh_interval_seconds(), 900)
 
     def test_refresh_interval_seconds_uses_positive_env_override(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_REFRESH_INTERVAL_MINUTES": "12"}, clear=False):
@@ -184,7 +184,7 @@ class OpenUsageStatusTests(unittest.TestCase):
 
     def test_refresh_interval_seconds_rejects_invalid_override(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_REFRESH_INTERVAL_MINUTES": "0"}, clear=False):
-            self.assertEqual(MODULE.refresh_interval_seconds(), 300)
+            self.assertEqual(MODULE.refresh_interval_seconds(), 900)
 
     def test_provider_order_defaults_to_claude_then_codex(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {}, clear=False):
