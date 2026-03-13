@@ -8,6 +8,7 @@ fi
 
 CURRENT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)"
 ENABLED_OPTION='@tmux_open_usage_enabled'
+PROVIDERS_OPTION='@tmux_open_usage_providers'
 RAW_STATUS_COMMAND="#($CURRENT_DIR/scripts/open_usage_status.sh)"
 STATUS_COMMAND="#[fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]"
 OLD_SECOND_ROW_FORMAT="#[align=left,none,fg=#5c5c5c]$RAW_STATUS_COMMAND#[default]"
@@ -17,6 +18,25 @@ trim_whitespace() {
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
+}
+
+has_configured_provider() {
+  local raw="$1"
+  local item trimmed
+  local IFS=','
+  local -a items=()
+
+  read -r -a items <<< "$raw"
+  for item in "${items[@]}"; do
+    trimmed="$(trim_whitespace "${item,,}")"
+    case "$trimmed" in
+      claude|codex)
+        return 0
+        ;;
+    esac
+  done
+
+  return 1
 }
 
 status_right_value="$(tmux show-option -gqv status-right)"
@@ -44,6 +64,11 @@ case "${enabled_value,,}" in
     exit 0
     ;;
 esac
+
+providers_value="$(tmux show-option -gqv "$PROVIDERS_OPTION")"
+if ! has_configured_provider "$providers_value"; then
+  exit 0
+fi
 
 status_right_value="$(tmux show-option -gqv status-right)"
 if [[ "$status_right_value" != *"$RAW_STATUS_COMMAND"* ]]; then

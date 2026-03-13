@@ -208,9 +208,9 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_REFRESH_INTERVAL_MINUTES": "0"}, clear=False):
             self.assertEqual(MODULE.refresh_interval_seconds(), 900)
 
-    def test_provider_order_defaults_to_claude_then_codex(self) -> None:
+    def test_provider_order_defaults_to_no_providers(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {}, clear=False):
-            self.assertEqual(MODULE.provider_order(), ["claude", "codex"])
+            self.assertEqual(MODULE.provider_order(), [])
 
     def test_provider_order_accepts_single_provider(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_PROVIDERS": "claude"}, clear=False):
@@ -228,9 +228,9 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(MODULE.provider_order(), ["codex", "claude"])
 
-    def test_provider_order_falls_back_when_no_valid_provider_is_configured(self) -> None:
+    def test_provider_order_returns_empty_when_no_valid_provider_is_configured(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_PROVIDERS": "unknown"}, clear=False):
-            self.assertEqual(MODULE.provider_order(), ["claude", "codex"])
+            self.assertEqual(MODULE.provider_order(), [])
 
     def test_join_status_parts(self) -> None:
         self.assertEqual(
@@ -264,6 +264,10 @@ class OpenUsageStatusTests(unittest.TestCase):
             mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
         ):
             self.assertEqual(MODULE.render_status_line(), "[-/-]")
+
+    def test_render_status_line_returns_empty_when_no_providers_are_configured(self) -> None:
+        with mock.patch.object(MODULE, "provider_order", return_value=[]):
+            self.assertEqual(MODULE.render_status_line(), "")
 
     def test_render_status_line_colors_failed_provider_text_red(self) -> None:
         with (

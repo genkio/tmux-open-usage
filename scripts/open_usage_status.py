@@ -70,7 +70,7 @@ def refresh_interval_seconds() -> int:
 def provider_order() -> list[str]:
     raw = os.environ.get("TMUX_OPEN_USAGE_PROVIDERS", "").strip()
     if not raw:
-        return list(PROVIDERS)
+        return []
 
     ordered: list[str] = []
     seen: set[str] = set()
@@ -82,7 +82,7 @@ def provider_order() -> list[str]:
         seen.add(provider)
 
     if not ordered:
-        return list(PROVIDERS)
+        return []
     return ordered
 
 
