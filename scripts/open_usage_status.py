@@ -793,6 +793,8 @@ def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
     seconds_left = (local_target - current).total_seconds()
     if seconds_left <= 0:
         return "0d"
+    if local_target.date() == current.date():
+        return "0d"
     return f"{math.ceil(seconds_left / 86400)}d"
 
 

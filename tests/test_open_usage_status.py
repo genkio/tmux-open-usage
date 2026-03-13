@@ -193,6 +193,10 @@ class OpenUsageStatusTests(unittest.TestCase):
         now = datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)
         self.assertEqual(MODULE.format_days_until_reset("2026-03-10T15:20:00Z", now=now), "3d")
 
+    def test_format_days_until_reset_shows_zero_for_same_day_reset(self) -> None:
+        now = datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)
+        self.assertEqual(MODULE.format_days_until_reset("2026-03-08T13:00:00Z", now=now), "0d")
+
     def test_format_days_until_reset_handles_missing_reset(self) -> None:
         self.assertEqual(MODULE.format_days_until_reset(None), "-")
 
