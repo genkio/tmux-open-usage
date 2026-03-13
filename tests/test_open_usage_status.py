@@ -212,9 +212,31 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_REFRESH_INTERVAL_MINUTES": "0"}, clear=False):
             self.assertEqual(MODULE.refresh_interval_seconds(), 900)
 
-    def test_provider_order_defaults_to_no_providers(self) -> None:
-        with mock.patch.dict(MODULE.os.environ, {}, clear=False):
+    def test_provider_order_auto_detects_available_providers(self) -> None:
+        with (
+            mock.patch.dict(MODULE.os.environ, {}, clear=False),
+            mock.patch.object(MODULE, "load_claude_credentials", return_value={"payload": {"claudeAiOauth": {"accessToken": "claude-token"}}}),
+            mock.patch.object(MODULE, "load_codex_auth", return_value={"payload": {"tokens": {"access_token": "codex-token"}}}),
+        ):
+            self.assertEqual(MODULE.provider_order(), ["claude", "codex"])
+
+    def test_provider_order_auto_detects_single_provider(self) -> None:
+        with (
+            mock.patch.dict(MODULE.os.environ, {}, clear=False),
+            mock.patch.object(MODULE, "load_claude_credentials", return_value=None),
+            mock.patch.object(MODULE, "load_codex_auth", return_value={"payload": {"tokens": {"access_token": "codex-token"}}}),
+        ):
+            self.assertEqual(MODULE.provider_order(), ["codex"])
+
+    def test_provider_order_does_not_auto_detect_from_claude_shared_cache(self) -> None:
+        with (
+            mock.patch.dict(MODULE.os.environ, {}, clear=False),
+            mock.patch.object(MODULE, "load_claude_credentials", return_value=None),
+            mock.patch.object(MODULE, "load_codex_auth", return_value=None),
+            mock.patch.object(MODULE, "load_shared_claude_usage") as mocked_shared_cache,
+        ):
             self.assertEqual(MODULE.provider_order(), [])
+            mocked_shared_cache.assert_not_called()
 
     def test_provider_order_accepts_single_provider(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_PROVIDERS": "claude"}, clear=False):
@@ -235,6 +257,14 @@ class OpenUsageStatusTests(unittest.TestCase):
     def test_provider_order_returns_empty_when_no_valid_provider_is_configured(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_PROVIDERS": "unknown"}, clear=False):
             self.assertEqual(MODULE.provider_order(), [])
+
+    def test_main_has_provider_returns_success_when_provider_is_available(self) -> None:
+        with mock.patch.object(MODULE, "provider_order", return_value=["codex"]):
+            self.assertEqual(MODULE.main(["open_usage_status.py", "--has-provider"]), 0)
+
+    def test_main_has_provider_returns_failure_when_no_provider_is_available(self) -> None:
+        with mock.patch.object(MODULE, "provider_order", return_value=[]):
+            self.assertEqual(MODULE.main(["open_usage_status.py", "--has-provider"]), 1)
 
     def test_join_status_parts(self) -> None:
         self.assertEqual(

@@ -4,9 +4,9 @@
 
 Current support target: macOS.
 
-By default, the plugin renders nothing until you set `@tmux_open_usage_providers`.
+By default, the plugin auto-detects supported providers from real auth state. If no supported provider is authenticated, it renders nothing.
 
-When configured, it shows:
+When at least one provider is active, it shows:
 
 - remaining 5-hour quota with compact reset time
 - remaining 7-day quota with compact days-to-reset
@@ -44,11 +44,12 @@ Example breakdown:
 
 ## How it works
 
-- TPM runs [`tmux-open-usage.tmux`](./tmux-open-usage.tmux), removes any old second-row plugin state left by earlier versions of this plugin, and injects the usage command into `status-right` when at least one provider is configured.
+- TPM runs [`tmux-open-usage.tmux`](./tmux-open-usage.tmux), removes any old second-row plugin state left by earlier versions of this plugin, and injects the usage command into `status-right` when at least one provider is configured or auto-detected.
 - The status command uses a 15-minute cache in `~/Library/Caches/tmux-open-usage` by default.
 - Claude Code data comes from the same OAuth usage endpoint your statusline script uses.
 - If direct Claude auth lookup is unavailable, the plugin can fall back to a shared Claude usage cache at `/tmp/claude_usage_cache.json` when it is recent enough.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
+- Auto-detection only uses real auth sources such as OAuth tokens, auth files, or keychain entries. Generic config files do not enable a provider by default.
 - Reset times are rendered in the machine's local timezone.
 - If Python is unavailable, the status segment shows `tmux-open-usage: install python3`.
 - Each provider is rendered as `session-left%session-reset/weekly-left%weekly-days-left`, in the order you configure.
@@ -84,7 +85,7 @@ set -g @tmux_open_usage_refresh_interval_minutes '15'
 
 Use any positive integer. Reload tmux after changing it.
 
-Provider order and visibility, default none. Set the providers you want:
+Provider order and visibility. If unset, the plugin auto-detects authenticated providers in the default order `claude,codex`:
 
 ```tmux
 set -g @tmux_open_usage_providers 'claude,codex'
@@ -98,7 +99,7 @@ set -g @tmux_open_usage_providers 'codex'
 set -g @tmux_open_usage_providers 'codex,claude'
 ```
 
-Only `claude` and `codex` are recognized. Unknown names are ignored. If the option is unset, empty, or no valid providers remain, the plugin renders nothing.
+Only `claude` and `codex` are recognized. Unknown names are ignored. When this option is set, it overrides auto-detection. If it is unset and no authenticated providers are found, the plugin renders nothing.
 
 ## Install
 
@@ -107,6 +108,8 @@ Public TPM install after publishing:
 ```tmux
 set -g @plugin 'genkio/tmux-open-usage'
 ```
+
+If you are already logged into Claude Code or Codex, you can stop there and let the plugin auto-detect providers.
 
 If you want Codex only, the minimal config is:
 

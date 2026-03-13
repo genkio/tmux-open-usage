@@ -70,7 +70,12 @@ def refresh_interval_seconds() -> int:
 def provider_order() -> list[str]:
     raw = os.environ.get("TMUX_OPEN_USAGE_PROVIDERS", "").strip()
     if not raw:
-        return []
+        ordered: list[str] = []
+        if load_claude_credentials():
+            ordered.append("claude")
+        if load_codex_auth():
+            ordered.append("codex")
+        return ordered
 
     ordered: list[str] = []
     seen: set[str] = set()
@@ -842,6 +847,9 @@ def render_status_line() -> str:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[1] == "--has-provider":
+        return 0 if provider_order() else 1
+
     if len(argv) == 3 and argv[1] == "--refresh" and argv[2] in PROVIDERS:
         return refresh_provider_cache(argv[2])
 
