@@ -50,6 +50,8 @@ Example breakdown:
 - If direct Claude auth lookup is unavailable, the plugin can fall back to a shared Claude usage cache at `/tmp/claude_usage_cache.json` when it is recent enough.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
 - Auto-detection only uses real auth sources such as OAuth tokens, auth files, or keychain entries. Generic config files do not enable a provider by default.
+- Auto-detection runs when the plugin loads or tmux config is reloaded. If no provider is available at that moment, the segment is not attached to `status-right`.
+- Once attached, provider selection is evaluated again each time the status command runs. If you log into Claude Code or Codex after tmux is already running and the segment was not attached yet, reload tmux config to attach it.
 - Reset times are rendered in the machine's local timezone.
 - If Python is unavailable, the status segment shows `tmux-open-usage: install python3`.
 - Each provider is rendered as `session-left%session-reset/weekly-left%weekly-days-left`, in the order you configure.
@@ -110,6 +112,12 @@ set -g @plugin 'genkio/tmux-open-usage'
 ```
 
 If you are already logged into Claude Code or Codex, you can stop there and let the plugin auto-detect providers.
+
+If you log into Claude Code or Codex later, reload tmux config so the status segment gets attached:
+
+```sh
+tmux source-file ~/.tmux.conf
+```
 
 If you want Codex only, the minimal config is:
 
