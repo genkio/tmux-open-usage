@@ -20,6 +20,10 @@ trim_whitespace() {
   printf '%s' "$value"
 }
 
+lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 has_configured_provider() {
   local raw="$1"
   local item trimmed
@@ -28,7 +32,7 @@ has_configured_provider() {
 
   read -r -a items <<< "$raw"
   for item in "${items[@]}"; do
-    trimmed="$(trim_whitespace "${item,,}")"
+    trimmed="$(trim_whitespace "$(lowercase "$item")")"
     case "$trimmed" in
       claude|codex)
         return 0
@@ -57,7 +61,7 @@ if [[ "$second_row_format" == "$OLD_SECOND_ROW_FORMAT" ]]; then
 fi
 
 enabled_value="$(tmux show-option -gqv "$ENABLED_OPTION")"
-case "${enabled_value,,}" in
+case "$(lowercase "$enabled_value")" in
   ""|1|on|yes|true)
     ;;
   0|off|no|false)
