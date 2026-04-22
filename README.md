@@ -15,31 +15,33 @@ When at least one provider is active, it shows:
 Example output:
 
 ```text
-[82%1a/55%3d | 23%10p/90%5d]
+ 82·1a/55·3d  23·10p/90·5d
 ```
 
 Format:
 
 ```text
-[provider-segment | provider-segment]
+ provider-segment  provider-segment
 ```
 
 With one provider configured, it renders as:
 
 ```text
-[provider-segment]
+ provider-segment
 ```
+
+Each provider segment is colored to distinguish it at a glance: Claude Code is orange, Codex is green.
 
 Example breakdown:
 
 - in this example, the first block is Claude Code and second block is Codex
-- `82%` means 82% of the current 5-hour quota is still left
+- `82` means 82% of the current 5-hour quota is still left
 - `1a` means the current 5-hour quota resets at 1am local time
-- `55%` means 55% of the weekly quota is still left
+- `55` means 55% of the weekly quota is still left
 - `3d` means the weekly quota resets within 3 days
-- `23%` means 23% of the current 5-hour quota is still left
+- `23` means 23% of the current 5-hour quota is still left
 - `10p` means the current 5-hour quota resets at 10pm local time
-- `90%` means 90% of the weekly quota is still left
+- `90` means 90% of the weekly quota is still left
 - `5d` means the weekly quota resets within 5 days
 
 ## How it works
@@ -54,7 +56,7 @@ Example breakdown:
 - Once attached, provider selection is evaluated again each time the status command runs. If you log into Claude Code or Codex after tmux is already running and the segment was not attached yet, reload tmux config to attach it.
 - Reset times are rendered in the machine's local timezone.
 - If Python is unavailable, the status segment shows `tmux-open-usage: install python3`.
-- Each provider is rendered as `session-left%session-reset/weekly-left%weekly-days-left`, in the order you configure.
+- Each provider is rendered as `session-left·session-reset/weekly-left·weekly-days-left`, in the order you configure.
 - `3p` means `3pm`, `1a` means `1am`, and `3d` means the weekly reset is within the next 3 days.
 - On macOS, the plugin can read and refresh auth from the same files/keychain entries used by Claude Code and Codex CLI.
 
