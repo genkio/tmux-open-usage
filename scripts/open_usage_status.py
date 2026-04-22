@@ -46,6 +46,10 @@ PROVIDERS = ("claude", "codex")
 MISSING_PROVIDER_SEGMENT = "-/-"
 FAILED_PROVIDER_FG = "red"
 STATUS_LINE_FG = "#5c5c5c"
+PROVIDER_FG = {
+    "claude": "#D97757",
+    "codex": "#10A37F",
+}
 
 
 class FetchResult(NamedTuple):
@@ -817,21 +821,23 @@ def render_provider_segment(provider: str, data: dict[str, Any], now: datetime |
         return None
 
     return (
-        f"{session_left}%{format_short_reset_clock(session_reset, now=now)}"
-        f"/{weekly_left}%{format_days_until_reset(weekly_reset, now=now)}"
+        f"{session_left}·{format_short_reset_clock(session_reset, now=now)}"
+        f"/{weekly_left}·{format_days_until_reset(weekly_reset, now=now)}"
     )
 
 
 def style_provider_part(provider: str, part: str) -> str:
-    if not provider_fetch_failed(provider):
-        return part
-    return f"#[fg={FAILED_PROVIDER_FG}]{part}#[fg={STATUS_LINE_FG}]"
+    if provider_fetch_failed(provider):
+        color = FAILED_PROVIDER_FG
+    else:
+        color = PROVIDER_FG.get(provider, STATUS_LINE_FG)
+    return f"#[fg={color}]{part}#[fg={STATUS_LINE_FG}]"
 
 
 def join_status_parts(parts: list[str]) -> str:
     if not parts:
         return ""
-    return f"[{' | '.join(parts)}]"
+    return " " + "  ".join(parts)
 
 
 def render_status_line() -> str:

@@ -268,12 +268,12 @@ class OpenUsageStatusTests(unittest.TestCase):
 
     def test_join_status_parts(self) -> None:
         self.assertEqual(
-            MODULE.join_status_parts(["82%1a/55%3d", "23%10p/90%5d"]),
-            "[82%1a/55%3d | 23%10p/90%5d]",
+            MODULE.join_status_parts(["82·1a/55·3d", "23·10p/90·5d"]),
+            " 82·1a/55·3d  23·10p/90·5d",
         )
 
     def test_join_status_parts_with_single_provider_has_no_separator(self) -> None:
-        self.assertEqual(MODULE.join_status_parts(["82%1a/55%3d"]), "[82%1a/55%3d]")
+        self.assertEqual(MODULE.join_status_parts(["82·1a/55·3d"]), " 82·1a/55·3d")
 
     def test_render_status_line_uses_placeholder_for_missing_provider_data(self) -> None:
         with (
@@ -286,10 +286,13 @@ class OpenUsageStatusTests(unittest.TestCase):
                     None,
                 ],
             ),
-            mock.patch.object(MODULE, "render_provider_segment", side_effect=["82%1a/55%3d", None]),
+            mock.patch.object(MODULE, "render_provider_segment", side_effect=["82·1a/55·3d", None]),
             mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
         ):
-            self.assertEqual(MODULE.render_status_line(), "[82%1a/55%3d | -/-]")
+            self.assertEqual(
+                MODULE.render_status_line(),
+                " #[fg=#D97757]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]-/-#[fg=#5c5c5c]",
+            )
 
     def test_render_status_line_single_missing_provider_has_no_separator(self) -> None:
         with (
@@ -297,7 +300,10 @@ class OpenUsageStatusTests(unittest.TestCase):
             mock.patch.object(MODULE, "get_provider_status", return_value=None),
             mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
         ):
-            self.assertEqual(MODULE.render_status_line(), "[-/-]")
+            self.assertEqual(
+                MODULE.render_status_line(),
+                " #[fg=#D97757]-/-#[fg=#5c5c5c]",
+            )
 
     def test_render_status_line_returns_empty_when_no_providers_are_configured(self) -> None:
         with mock.patch.object(MODULE, "provider_order", return_value=[]):
@@ -314,12 +320,12 @@ class OpenUsageStatusTests(unittest.TestCase):
                     {"session": {"pct": 77, "reset_at": "2026-03-09T10:00:00Z"}, "weekly": {"pct": 10, "reset_at": "2026-03-15T09:00:00Z"}},
                 ],
             ),
-            mock.patch.object(MODULE, "render_provider_segment", side_effect=["82%1a/55%3d", "23%10p/90%5d"]),
+            mock.patch.object(MODULE, "render_provider_segment", side_effect=["82·1a/55·3d", "23·10p/90·5d"]),
             mock.patch.object(MODULE, "provider_fetch_failed", side_effect=[True, False]),
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                "[#[fg=red]82%1a/55%3d#[fg=#5c5c5c] | 23%10p/90%5d]",
+                " #[fg=red]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]23·10p/90·5d#[fg=#5c5c5c]",
             )
 
     def test_refresh_provider_cache_keeps_failure_flag_until_fresh_success(self) -> None:
@@ -365,7 +371,7 @@ class OpenUsageStatusTests(unittest.TestCase):
             },
             now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
         )
-        self.assertEqual(segment, "91%3p/69%3d")
+        self.assertEqual(segment, "91·3p/69·3d")
 
     def test_render_provider_segment_handles_missing_session_reset(self) -> None:
         segment = MODULE.render_provider_segment(
@@ -376,7 +382,7 @@ class OpenUsageStatusTests(unittest.TestCase):
             },
             now=datetime(2026, 3, 9, 0, 0, tzinfo=timezone.utc),
         )
-        self.assertEqual(segment, "100%-/83%6d")
+        self.assertEqual(segment, "100·-/83·6d")
 
 
 if __name__ == "__main__":
