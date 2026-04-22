@@ -44,10 +44,10 @@ CODEX_REFRESH_AGE_SECONDS = 8 * 24 * 60 * 60
 
 PROVIDERS = ("claude", "codex")
 MISSING_PROVIDER_SEGMENT = "-/-"
-FAILED_PROVIDER_FG = "red"
 STATUS_LINE_FG = "#5c5c5c"
+FAILED_PROVIDER_FG = STATUS_LINE_FG
 PROVIDER_FG = {
-    "claude": "#F5A623",
+    "claude": "#FF9500",
     "codex": "#10A37F",
 }
 

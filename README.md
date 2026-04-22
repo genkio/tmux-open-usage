@@ -30,7 +30,7 @@ With one provider configured, it renders as:
  provider-segment
 ```
 
-Each provider segment is colored to distinguish it at a glance: Claude Code is amber, Codex is green.
+Each provider segment is colored to distinguish it at a glance: Claude Code is orange, Codex is green.
 
 Example breakdown:
 
@@ -61,7 +61,7 @@ Example breakdown:
 - On macOS, the plugin can read and refresh auth from the same files/keychain entries used by Claude Code and Codex CLI.
 
 If a provider cannot be read or refreshed, the plugin falls back to stale cache.
-If the latest fetch for a provider fails, that provider's text turns red until a later fetch for that same provider succeeds.
+If the latest fetch for a provider fails, that provider's text fades to grey until a later fetch for that same provider succeeds.
 If a configured provider still cannot be rendered, its slot becomes `-/-`.
 The plugin preserves the user's existing tmux status height, except for the exact old two-line plugin migration case.
 

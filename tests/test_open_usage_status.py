@@ -291,7 +291,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=#F5A623]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]-/-#[fg=#5c5c5c]",
+                " #[fg=#FF9500]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]-/-#[fg=#5c5c5c]",
             )
 
     def test_render_status_line_single_missing_provider_has_no_separator(self) -> None:
@@ -302,14 +302,14 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=#F5A623]-/-#[fg=#5c5c5c]",
+                " #[fg=#FF9500]-/-#[fg=#5c5c5c]",
             )
 
     def test_render_status_line_returns_empty_when_no_providers_are_configured(self) -> None:
         with mock.patch.object(MODULE, "provider_order", return_value=[]):
             self.assertEqual(MODULE.render_status_line(), "")
 
-    def test_render_status_line_colors_failed_provider_text_red(self) -> None:
+    def test_render_status_line_greys_out_failed_provider(self) -> None:
         with (
             mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
             mock.patch.object(
@@ -325,7 +325,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=red]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]23·10p/90·5d#[fg=#5c5c5c]",
+                " #[fg=#5c5c5c]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]23·10p/90·5d#[fg=#5c5c5c]",
             )
 
     def test_refresh_provider_cache_keeps_failure_flag_until_fresh_success(self) -> None:
