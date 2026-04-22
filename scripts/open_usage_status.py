@@ -47,7 +47,7 @@ MISSING_PROVIDER_SEGMENT = "-/-"
 FAILED_PROVIDER_FG = "red"
 STATUS_LINE_FG = "#5c5c5c"
 PROVIDER_FG = {
-    "claude": "#D97757",
+    "claude": "#F5A623",
     "codex": "#10A37F",
 }
 

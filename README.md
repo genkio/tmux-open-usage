@@ -30,7 +30,7 @@ With one provider configured, it renders as:
  provider-segment
 ```
 
-Each provider segment is colored to distinguish it at a glance: Claude Code is orange, Codex is green.
+Each provider segment is colored to distinguish it at a glance: Claude Code is amber, Codex is green.
 
 Example breakdown:
 
