@@ -16,6 +16,9 @@ from urllib import error, parse, request
 
 LOCK_TTL_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 8
+# Cloudflare blocks urllib's default UA on the OAuth token endpoints
+# (error 1010). Any non-default value passes.
+USER_AGENT = "tmux-open-usage"
 DEFAULT_REFRESH_INTERVAL_MINUTES = 15
 CLAUDE_SHARED_CACHE_MAX_AGE_SECONDS = 24 * 60 * 60
 
@@ -222,7 +225,9 @@ def http_request(
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
 ) -> dict[str, Any]:
-    req = request.Request(url, data=body, headers=headers or {}, method=method)
+    final_headers = dict(headers or {})
+    final_headers.setdefault("User-Agent", USER_AGENT)
+    req = request.Request(url, data=body, headers=final_headers, method=method)
     try:
         with request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as response:
             return {
@@ -604,7 +609,7 @@ def fetch_codex_status_result() -> FetchResult:
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/json",
-        "User-Agent": "tmux-open-usage",
+        "User-Agent": USER_AGENT,
     }
     account_id = tokens.get("account_id")
     if account_id:
