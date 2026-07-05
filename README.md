@@ -6,16 +6,17 @@ Current support target: macOS.
 
 By default, the plugin auto-detects supported providers from real auth state. If no supported provider is authenticated, it renders nothing.
 
-When at least one provider is active, it shows:
+When at least one provider is active, it shows, for each provider:
 
-- remaining 5-hour quota with compact reset time
-- remaining 7-day quota with compact days-to-reset
+- remaining 5-hour session quota with compact reset time
 - the selected providers in one compact text segment on the right side of row 1
+
+By default only the current 5-hour session is shown. Set `@tmux_open_usage_view` to `all` to also show the 7-day weekly quota.
 
 Example output:
 
 ```text
- 82·1a/55·3d  23·10p/90·5d
+ 82·1a  23·10p
 ```
 
 Format:
@@ -37,12 +38,10 @@ Example breakdown:
 - in this example, the first block is Claude Code and second block is Codex
 - `82` means 82% of the current 5-hour quota is still left
 - `1a` means the current 5-hour quota resets at 1am local time
-- `55` means 55% of the weekly quota is still left
-- `3d` means the weekly quota resets within 3 days
 - `23` means 23% of the current 5-hour quota is still left
 - `10p` means the current 5-hour quota resets at 10pm local time
-- `90` means 90% of the weekly quota is still left
-- `5d` means the weekly quota resets within 5 days
+
+With `@tmux_open_usage_view 'all'`, each segment gains a `/weekly-left·weekly-days-left` suffix, for example `82·1a/55·3d`, where `55` means 55% of the weekly quota is still left and `3d` means the weekly quota resets within 3 days.
 
 ## How it works
 
@@ -56,13 +55,13 @@ Example breakdown:
 - Once attached, provider selection is evaluated again each time the status command runs. If you log into Claude Code or Codex after tmux is already running and the segment was not attached yet, reload tmux config to attach it.
 - Reset times are rendered in the machine's local timezone.
 - If Python is unavailable, the status segment shows `tmux-open-usage: install python3`.
-- Each provider is rendered as `session-left·session-reset/weekly-left·weekly-days-left`, in the order you configure.
+- By default each provider is rendered as `session-left·session-reset`, in the order you configure. With `@tmux_open_usage_view 'all'`, it renders as `session-left·session-reset/weekly-left·weekly-days-left`.
 - `3p` means `3pm`, `1a` means `1am`, and `3d` means the weekly reset is within the next 3 days.
 - On macOS, the plugin can read and refresh auth from the same files/keychain entries used by Claude Code and Codex CLI.
 
 If a provider cannot be read or refreshed, the plugin falls back to stale cache.
 If the latest fetch for a provider fails, that provider's text fades to grey until a later fetch for that same provider succeeds.
-If a configured provider still cannot be rendered, its slot becomes `-/-`.
+If a configured provider still cannot be rendered, its slot becomes `-` (or `-/-` when `@tmux_open_usage_view` is `all`).
 The plugin preserves the user's existing tmux status height, except for the exact old two-line plugin migration case.
 
 ## Config
@@ -104,6 +103,17 @@ set -g @tmux_open_usage_providers 'codex,claude'
 ```
 
 Only `claude` and `codex` are recognized. Unknown names are ignored. When this option is set, it overrides auto-detection. If it is unset and no authenticated providers are found, the plugin renders nothing.
+
+Which usage windows to show, default `session`:
+
+```tmux
+set -g @tmux_open_usage_view 'session'
+```
+
+- `session` shows only the current 5-hour session quota, for example `82·1a`.
+- `all` also appends the 7-day weekly quota, for example `82·1a/55·3d`.
+
+Unknown values fall back to `session`. Reload tmux after changing it.
 
 ## Install
 

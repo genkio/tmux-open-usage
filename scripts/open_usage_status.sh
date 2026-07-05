@@ -9,6 +9,7 @@ fi
 CURRENT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)"
 REFRESH_OPTION='@tmux_open_usage_refresh_interval_minutes'
 PROVIDERS_OPTION='@tmux_open_usage_providers'
+VIEW_OPTION='@tmux_open_usage_view'
 
 refresh_minutes="$(tmux show-option -gqv "$REFRESH_OPTION" 2>/dev/null || true)"
 if [[ "$refresh_minutes" =~ ^[1-9][0-9]*$ ]]; then
@@ -18,6 +19,11 @@ fi
 providers="$(tmux show-option -gqv "$PROVIDERS_OPTION" 2>/dev/null || true)"
 if [[ -n "$providers" ]]; then
   export TMUX_OPEN_USAGE_PROVIDERS="$providers"
+fi
+
+view="$(tmux show-option -gqv "$VIEW_OPTION" 2>/dev/null || true)"
+if [[ -n "$view" ]]; then
+  export TMUX_OPEN_USAGE_VIEW="$view"
 fi
 
 if command -v python3 >/dev/null 2>&1; then

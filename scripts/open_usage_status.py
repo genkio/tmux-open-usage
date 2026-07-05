@@ -46,7 +46,10 @@ CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_REFRESH_AGE_SECONDS = 8 * 24 * 60 * 60
 
 PROVIDERS = ("claude", "codex")
+USAGE_VIEWS = ("session", "all")
+DEFAULT_USAGE_VIEW = "session"
 MISSING_PROVIDER_SEGMENT = "-/-"
+MISSING_SESSION_SEGMENT = "-"
 STATUS_LINE_FG = "#5c5c5c"
 FAILED_PROVIDER_FG = STATUS_LINE_FG
 PROVIDER_FG = {
@@ -96,6 +99,13 @@ def provider_order() -> list[str]:
     if not ordered:
         return []
     return ordered
+
+
+def usage_view() -> str:
+    raw = os.environ.get("TMUX_OPEN_USAGE_VIEW", "").strip().lower()
+    if raw in USAGE_VIEWS:
+        return raw
+    return DEFAULT_USAGE_VIEW
 
 
 def cache_dir() -> Path:
@@ -814,21 +824,26 @@ def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
 
 def render_provider_segment(provider: str, data: dict[str, Any], now: datetime | None = None) -> str | None:
     session = data.get("session")
-    weekly = data.get("weekly")
-    if not isinstance(session, dict) or not isinstance(weekly, dict):
+    if not isinstance(session, dict):
         return None
 
     session_left = remaining_percent(read_int(session.get("pct")))
-    weekly_left = remaining_percent(read_int(weekly.get("pct")))
-    session_reset = session.get("reset_at")
-    weekly_reset = weekly.get("reset_at")
-    if session_left is None or weekly_left is None:
+    if session_left is None:
         return None
+    session_part = f"{session_left}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
 
-    return (
-        f"{session_left}·{format_short_reset_clock(session_reset, now=now)}"
-        f"/{weekly_left}·{format_days_until_reset(weekly_reset, now=now)}"
-    )
+    if usage_view() == "session":
+        return session_part
+
+    weekly = data.get("weekly")
+    if not isinstance(weekly, dict):
+        return None
+    weekly_left = remaining_percent(read_int(weekly.get("pct")))
+    if weekly_left is None:
+        return None
+    weekly_part = f"{weekly_left}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
+
+    return f"{session_part}/{weekly_part}"
 
 
 def style_provider_part(provider: str, part: str) -> str:
@@ -845,15 +860,22 @@ def join_status_parts(parts: list[str]) -> str:
     return " " + "  ".join(parts)
 
 
+def missing_provider_segment() -> str:
+    if usage_view() == "session":
+        return MISSING_SESSION_SEGMENT
+    return MISSING_PROVIDER_SEGMENT
+
+
 def render_status_line() -> str:
+    placeholder = missing_provider_segment()
     parts: list[str] = []
     for provider in provider_order():
         data = get_provider_status(provider)
         if not data:
-            parts.append(style_provider_part(provider, MISSING_PROVIDER_SEGMENT))
+            parts.append(style_provider_part(provider, placeholder))
             continue
         part = render_provider_segment(provider, data)
-        parts.append(style_provider_part(provider, part if part else MISSING_PROVIDER_SEGMENT))
+        parts.append(style_provider_part(provider, part if part else placeholder))
     return join_status_parts(parts)
 
 
