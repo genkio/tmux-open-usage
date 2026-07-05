@@ -314,6 +314,9 @@ class OpenUsageStatusTests(unittest.TestCase):
             " 82·1a/55·3d  23·10p/90·5d",
         )
 
+    def test_join_status_parts_uses_custom_separator(self) -> None:
+        self.assertEqual(MODULE.join_status_parts(["65·12p", "9·3p"], " "), " 65·12p 9·3p")
+
     def test_join_status_parts_with_single_provider_has_no_separator(self) -> None:
         self.assertEqual(MODULE.join_status_parts(["82·1a/55·3d"]), " 82·1a/55·3d")
 
@@ -353,8 +356,29 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.object(MODULE, "provider_order", return_value=[]):
             self.assertEqual(MODULE.render_status_line(), "")
 
+    def test_render_status_line_session_view_uses_single_space_separator(self) -> None:
+        with (
+            mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False),
+            mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
+            mock.patch.object(
+                MODULE,
+                "get_provider_status",
+                side_effect=[
+                    {"session": {"pct": 35, "reset_at": "2026-03-08T12:00:00Z"}, "weekly": {"pct": 45, "reset_at": "2026-03-11T09:00:00Z"}},
+                    {"session": {"pct": 91, "reset_at": "2026-03-08T15:00:00Z"}, "weekly": {"pct": 10, "reset_at": "2026-03-15T09:00:00Z"}},
+                ],
+            ),
+            mock.patch.object(MODULE, "render_provider_segment", side_effect=["65·12p", "9·3p"]),
+            mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
+        ):
+            self.assertEqual(
+                MODULE.render_status_line(),
+                " #[fg=#E67E22]65·12p#[fg=#5c5c5c] #[fg=#10A37F]9·3p#[fg=#5c5c5c]",
+            )
+
     def test_render_status_line_greys_out_failed_provider(self) -> None:
         with (
+            mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "all"}, clear=False),
             mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
             mock.patch.object(
                 MODULE,

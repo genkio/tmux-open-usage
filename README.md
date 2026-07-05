@@ -16,7 +16,7 @@ By default only the current 5-hour session is shown. Set `@tmux_open_usage_view`
 Example output:
 
 ```text
- 82·1a  23·10p
+ 82·1a 23·10p
 ```
 
 Format:

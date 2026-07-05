@@ -854,10 +854,10 @@ def style_provider_part(provider: str, part: str) -> str:
     return f"#[fg={color}]{part}#[fg={STATUS_LINE_FG}]"
 
 
-def join_status_parts(parts: list[str]) -> str:
+def join_status_parts(parts: list[str], separator: str = "  ") -> str:
     if not parts:
         return ""
-    return " " + "  ".join(parts)
+    return " " + separator.join(parts)
 
 
 def missing_provider_segment() -> str:
@@ -868,6 +868,7 @@ def missing_provider_segment() -> str:
 
 def render_status_line() -> str:
     placeholder = missing_provider_segment()
+    separator = " " if usage_view() == "session" else "  "
     parts: list[str] = []
     for provider in provider_order():
         data = get_provider_status(provider)
@@ -876,7 +877,7 @@ def render_status_line() -> str:
             continue
         part = render_provider_segment(provider, data)
         parts.append(style_provider_part(provider, part if part else placeholder))
-    return join_status_parts(parts)
+    return join_status_parts(parts, separator)
 
 
 def main(argv: list[str]) -> int:
