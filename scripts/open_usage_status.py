@@ -44,6 +44,7 @@ CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 CODEX_REFRESH_URL = "https://auth.openai.com/oauth/token"
 CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_REFRESH_AGE_SECONDS = 8 * 24 * 60 * 60
+CODEX_WEEKLY_WINDOW_SECONDS = 7 * 24 * 60 * 60
 
 PROVIDERS = ("claude", "codex")
 USAGE_VIEWS = ("session", "all")
@@ -62,6 +63,7 @@ class FetchResult(NamedTuple):
     data: dict[str, Any] | None = None
     fresh: bool = False
     failed: bool = False
+    retry_after_seconds: int | None = None
 
 
 def refresh_interval_seconds() -> int:
@@ -125,6 +127,10 @@ def lock_path(provider: str) -> Path:
 
 def failure_path(provider: str) -> Path:
     return cache_dir() / f"{provider}.failed"
+
+
+def retry_path(provider: str) -> Path:
+    return cache_dir() / f"{provider}.retry_at"
 
 
 def parse_json_blob(text: str | bytes | None) -> Any:
@@ -286,6 +292,16 @@ def read_int(value: Any) -> int | None:
 
 def is_auth_status(status: int) -> bool:
     return status in (401, 403)
+
+
+def response_retry_after_seconds(response: dict[str, Any]) -> int | None:
+    headers = response.get("headers")
+    if not isinstance(headers, dict):
+        return None
+    seconds = read_int(headers.get("retry-after"))
+    if seconds is None or seconds <= 0:
+        return None
+    return seconds
 
 
 def load_claude_credentials() -> dict[str, Any] | None:
@@ -452,6 +468,12 @@ def fetch_claude_status_result() -> FetchResult:
         headers["Authorization"] = f"Bearer {refreshed}"
         response = http_request("GET", CLAUDE_USAGE_URL, headers=headers)
 
+    if response["status"] == 429:
+        return FetchResult(
+            load_shared_claude_usage(),
+            failed=True,
+            retry_after_seconds=response_retry_after_seconds(response),
+        )
     if response["status"] < 200 or response["status"] >= 300:
         return FetchResult(load_shared_claude_usage(), failed=True)
 
@@ -574,27 +596,34 @@ def normalize_codex_usage(data: Any, headers: dict[str, str] | None = None, now:
 
     primary = rate_limit.get("primary_window")
     secondary = rate_limit.get("secondary_window")
-    if not isinstance(primary, dict) or not isinstance(secondary, dict):
+    if not isinstance(primary, dict):
         return None
 
     session_pct = read_int(headers.get("x-codex-primary-used-percent"))
     if session_pct is None:
         session_pct = read_int(primary.get("used_percent"))
-    weekly_pct = read_int(headers.get("x-codex-secondary-used-percent"))
-    if weekly_pct is None:
-        weekly_pct = read_int(secondary.get("used_percent"))
-
     session_reset = codex_reset_iso(primary, now)
-    weekly_reset = codex_reset_iso(secondary, now)
-
-    if session_pct is None or weekly_pct is None or not session_reset or not weekly_reset:
+    if session_pct is None or not session_reset:
         return None
 
-    return {
+    normalized: dict[str, Any] = {
         "provider": "codex",
         "session": {"pct": session_pct, "reset_at": session_reset},
-        "weekly": {"pct": weekly_pct, "reset_at": weekly_reset},
     }
+
+    if isinstance(secondary, dict):
+        weekly_pct = read_int(headers.get("x-codex-secondary-used-percent"))
+        if weekly_pct is None:
+            weekly_pct = read_int(secondary.get("used_percent"))
+        weekly_reset = codex_reset_iso(secondary, now)
+        if weekly_pct is None or not weekly_reset:
+            return None
+        normalized["weekly"] = {"pct": weekly_pct, "reset_at": weekly_reset}
+        return normalized
+
+    if read_int(primary.get("limit_window_seconds")) == CODEX_WEEKLY_WINDOW_SECONDS:
+        normalized["weekly"] = normalized.pop("session")
+    return normalized
 
 
 def fetch_codex_status_result() -> FetchResult:
@@ -633,6 +662,11 @@ def fetch_codex_status_result() -> FetchResult:
         headers["Authorization"] = f"Bearer {refreshed}"
         response = http_request("GET", CODEX_USAGE_URL, headers=headers)
 
+    if response["status"] == 429:
+        return FetchResult(
+            failed=True,
+            retry_after_seconds=response_retry_after_seconds(response),
+        )
     if response["status"] < 200 or response["status"] >= 300:
         return FetchResult(failed=True)
 
@@ -693,14 +727,36 @@ def provider_fetch_failed(provider: str) -> bool:
     return failure_path(provider).exists()
 
 
+def retry_is_active(provider: str) -> bool:
+    try:
+        retry_at = int(retry_path(provider).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return False
+    return time.time() < retry_at
+
+
+def mark_fetch_retry(provider: str, seconds: int) -> None:
+    atomic_write_text(retry_path(provider), str(int(time.time()) + seconds))
+
+
+def clear_fetch_retry(provider: str) -> None:
+    retry_path(provider).unlink(missing_ok=True)
+
+
 def refresh_provider_cache(provider: str) -> int:
+    if retry_is_active(provider):
+        return 0 if load_cached_status(provider) else 1
+
     write_lock(provider)
     try:
         result = fetch_provider_result(provider)
         if result.data:
             write_cached_status(provider, result.data)
+        if result.retry_after_seconds is not None:
+            mark_fetch_retry(provider, result.retry_after_seconds)
         if result.fresh:
             clear_fetch_failure(provider)
+            clear_fetch_retry(provider)
         elif result.failed:
             mark_fetch_failure(provider)
         if result.data:
@@ -711,7 +767,7 @@ def refresh_provider_cache(provider: str) -> int:
 
 
 def refresh_in_background(provider: str) -> None:
-    if lock_is_active(provider):
+    if lock_is_active(provider) or retry_is_active(provider):
         return
     write_lock(provider)
     subprocess.Popen(
@@ -824,26 +880,25 @@ def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
 
 def render_provider_segment(provider: str, data: dict[str, Any], now: datetime | None = None) -> str | None:
     session = data.get("session")
-    if not isinstance(session, dict):
-        return None
-
-    session_left = remaining_percent(read_int(session.get("pct")))
-    if session_left is None:
-        return None
-    session_part = f"{session_left}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
-
-    if usage_view() == "session":
-        return session_part
+    session_part: str | None = None
+    if isinstance(session, dict):
+        session_left = remaining_percent(read_int(session.get("pct")))
+        if session_left is not None:
+            session_part = f"{session_left}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
 
     weekly = data.get("weekly")
-    if not isinstance(weekly, dict):
-        return None
-    weekly_left = remaining_percent(read_int(weekly.get("pct")))
-    if weekly_left is None:
-        return None
-    weekly_part = f"{weekly_left}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
+    weekly_part: str | None = None
+    if isinstance(weekly, dict):
+        weekly_left = remaining_percent(read_int(weekly.get("pct")))
+        if weekly_left is not None:
+            weekly_part = f"{weekly_left}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
 
-    return f"{session_part}/{weekly_part}"
+    if usage_view() == "session":
+        return session_part or weekly_part
+
+    if session_part is None and weekly_part is None:
+        return None
+    return f"{session_part or '-'}/{weekly_part or '-'}"
 
 
 def style_provider_part(provider: str, part: str) -> str:

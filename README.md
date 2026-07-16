@@ -50,6 +50,7 @@ With `@tmux_open_usage_view 'all'`, each segment gains a `/weekly-left·weekly-d
 - Claude Code data comes from the same OAuth usage endpoint your statusline script uses.
 - If direct Claude auth lookup is unavailable, the plugin can fall back to a shared Claude usage cache at `/tmp/claude_usage_cache.json` when it is recent enough.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
+- When Codex returns only a weekly window, the default session view falls back to that available quota and renders its reset in days, for example `83·6d`.
 - Auto-detection only uses real auth sources such as OAuth tokens, auth files, or keychain entries. Generic config files do not enable a provider by default.
 - Auto-detection runs when the plugin loads or tmux config is reloaded. If no provider is available at that moment, the segment is not attached to `status-right`.
 - Once attached, provider selection is evaluated again each time the status command runs. If you log into Claude Code or Codex after tmux is already running and the segment was not attached yet, reload tmux config to attach it.
@@ -61,6 +62,7 @@ With `@tmux_open_usage_view 'all'`, each segment gains a `/weekly-left·weekly-d
 
 If a provider cannot be read or refreshed, the plugin falls back to stale cache.
 If the latest fetch for a provider fails, that provider's text fades to grey until a later fetch for that same provider succeeds.
+If a provider responds with `Retry-After`, the plugin waits for that backoff to expire before fetching it again.
 If a configured provider still cannot be rendered, its slot becomes `-` (or `-/-` when `@tmux_open_usage_view` is `all`).
 The plugin preserves the user's existing tmux status height, except for the exact old two-line plugin migration case.
 

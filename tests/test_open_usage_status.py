@@ -114,6 +114,31 @@ class OpenUsageStatusTests(unittest.TestCase):
                 MODULE.FetchResult(fallback, failed=True),
             )
 
+    def test_fetch_claude_status_result_preserves_retry_after(self) -> None:
+        fallback = {
+            "provider": "claude",
+            "session": {"pct": 1, "reset_at": "2026-03-08T14:00:00Z"},
+            "weekly": {"pct": 7, "reset_at": "2026-03-13T04:00:00Z"},
+        }
+        with (
+            mock.patch.object(
+                MODULE,
+                "load_claude_credentials",
+                return_value={"payload": {"claudeAiOauth": {"accessToken": "token-123"}}},
+            ),
+            mock.patch.object(MODULE, "claude_needs_refresh", return_value=False),
+            mock.patch.object(
+                MODULE,
+                "http_request",
+                return_value={"status": 429, "headers": {"retry-after": "3487"}, "body": ""},
+            ),
+            mock.patch.object(MODULE, "load_shared_claude_usage", return_value=fallback),
+        ):
+            self.assertEqual(
+                MODULE.fetch_claude_status_result(),
+                MODULE.FetchResult(fallback, failed=True, retry_after_seconds=3487),
+            )
+
     def test_http_request_sets_user_agent(self) -> None:
         # Regression: missing UA hits Cloudflare's 1010 block, froze Claude refresh.
         captured: list = []
@@ -209,6 +234,28 @@ class OpenUsageStatusTests(unittest.TestCase):
                 "provider": "codex",
                 "session": {"pct": 9, "reset_at": "2026-03-08T15:00:00Z"},
                 "weekly": {"pct": 31, "reset_at": "2026-03-11T15:00:00Z"},
+            },
+        )
+
+    def test_normalize_codex_usage_accepts_weekly_only_primary_window(self) -> None:
+        payload = {
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 17,
+                    "limit_window_seconds": 604800,
+                    "reset_at": 1773241200,
+                },
+                "secondary_window": None,
+            }
+        }
+        self.assertEqual(
+            MODULE.normalize_codex_usage(
+                payload,
+                now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
+            ),
+            {
+                "provider": "codex",
+                "weekly": {"pct": 17, "reset_at": "2026-03-11T15:00:00Z"},
             },
         )
 
@@ -430,6 +477,25 @@ class OpenUsageStatusTests(unittest.TestCase):
                 self.assertFalse(MODULE.provider_fetch_failed("claude"))
                 self.assertEqual(MODULE.load_cached_status("claude"), fresh)
 
+    def test_refresh_provider_cache_respects_retry_after(self) -> None:
+        cached = {
+            "provider": "claude",
+            "session": {"pct": 1, "reset_at": "2026-03-08T14:00:00Z"},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_CACHE_DIR": temp_dir}, clear=False),
+                mock.patch.object(
+                    MODULE,
+                    "fetch_provider_result",
+                    return_value=MODULE.FetchResult(cached, failed=True, retry_after_seconds=3600),
+                ) as fetch,
+            ):
+                self.assertEqual(MODULE.refresh_provider_cache("claude"), 0)
+                self.assertTrue(MODULE.retry_is_active("claude"))
+                self.assertEqual(MODULE.refresh_provider_cache("claude"), 0)
+                fetch.assert_called_once_with("claude")
+
     def test_render_provider_segment_defaults_to_session_only(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": ""}, clear=False):
             segment = MODULE.render_provider_segment(
@@ -462,6 +528,24 @@ class OpenUsageStatusTests(unittest.TestCase):
                 now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
             )
         self.assertEqual(segment, "60·3p")
+
+    def test_render_provider_segment_session_view_falls_back_to_weekly(self) -> None:
+        with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False):
+            segment = MODULE.render_provider_segment(
+                "codex",
+                {"weekly": {"pct": 17, "reset_at": "2026-03-11T15:20:00Z"}},
+                now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "83·4d")
+
+    def test_render_provider_segment_all_view_handles_missing_session(self) -> None:
+        with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "all"}, clear=False):
+            segment = MODULE.render_provider_segment(
+                "codex",
+                {"weekly": {"pct": 17, "reset_at": "2026-03-11T15:20:00Z"}},
+                now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "-/83·4d")
 
     def test_render_provider_segment_handles_missing_session_reset(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "all"}, clear=False):
