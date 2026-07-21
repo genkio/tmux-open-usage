@@ -10,6 +10,7 @@ CURRENT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR" && pwd)"
 REFRESH_OPTION='@tmux_open_usage_refresh_interval_minutes'
 PROVIDERS_OPTION='@tmux_open_usage_providers'
 VIEW_OPTION='@tmux_open_usage_view'
+CLAUDE_FABLE_OPTION='@tmux_open_usage_claude_fable'
 
 refresh_minutes="$(tmux show-option -gqv "$REFRESH_OPTION" 2>/dev/null || true)"
 if [[ "$refresh_minutes" =~ ^[1-9][0-9]*$ ]]; then
@@ -24,6 +25,11 @@ fi
 view="$(tmux show-option -gqv "$VIEW_OPTION" 2>/dev/null || true)"
 if [[ -n "$view" ]]; then
   export TMUX_OPEN_USAGE_VIEW="$view"
+fi
+
+claude_fable="$(tmux show-option -gqv "$CLAUDE_FABLE_OPTION" 2>/dev/null || true)"
+if [[ -n "$claude_fable" ]]; then
+  export TMUX_OPEN_USAGE_CLAUDE_FABLE="$claude_fable"
 fi
 
 if command -v python3 >/dev/null 2>&1; then

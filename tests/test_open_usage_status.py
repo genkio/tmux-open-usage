@@ -40,6 +40,53 @@ class OpenUsageStatusTests(unittest.TestCase):
             },
         )
 
+    def test_normalize_claude_usage_extracts_fable_weekly(self) -> None:
+        payload = {
+            "five_hour": {"utilization": 22, "resets_at": "2026-07-21T04:00:00Z"},
+            "seven_day": {"utilization": 11, "resets_at": "2026-07-26T16:00:00Z"},
+            "limits": [
+                {"kind": "session", "group": "session", "percent": 22},
+                {"kind": "weekly_all", "group": "weekly", "percent": 11},
+                {
+                    "kind": "weekly_scoped",
+                    "group": "weekly",
+                    "percent": 6,
+                    "resets_at": "2026-07-26T16:00:00Z",
+                    "scope": {"model": {"id": None, "display_name": "Fable"}},
+                },
+            ],
+        }
+        self.assertEqual(
+            MODULE.normalize_claude_usage(payload),
+            {
+                "provider": "claude",
+                "session": {"pct": 22, "reset_at": "2026-07-21T04:00:00Z"},
+                "weekly": {"pct": 11, "reset_at": "2026-07-26T16:00:00Z"},
+                "weekly_fable": {"pct": 6, "reset_at": "2026-07-26T16:00:00Z"},
+            },
+        )
+
+    def test_normalize_claude_usage_omits_fable_when_absent(self) -> None:
+        payload = {
+            "five_hour": {"utilization": 22, "resets_at": "2026-07-21T04:00:00Z"},
+            "seven_day": {"utilization": 11, "resets_at": "2026-07-26T16:00:00Z"},
+            "limits": [{"kind": "weekly_scoped", "group": "weekly", "percent": 6, "scope": None}],
+        }
+        self.assertNotIn("weekly_fable", MODULE.normalize_claude_usage(payload))
+
+    def test_extract_claude_fable_weekly_ignores_session_scoped(self) -> None:
+        data = {
+            "limits": [
+                {
+                    "kind": "session_scoped",
+                    "group": "session",
+                    "percent": 3,
+                    "scope": {"model": {"display_name": "Fable"}},
+                }
+            ]
+        }
+        self.assertIsNone(MODULE.extract_claude_fable_weekly(data))
+
     def test_normalize_claude_usage_accepts_missing_session_reset(self) -> None:
         payload = {
             "five_hour": {"utilization": 0, "resets_at": None},
@@ -528,6 +575,51 @@ class OpenUsageStatusTests(unittest.TestCase):
                 now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
             )
         self.assertEqual(segment, "60·3p")
+
+    def test_render_provider_segment_appends_fable_when_enabled(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_FABLE": "on"},
+            clear=False,
+        ):
+            segment = MODULE.render_provider_segment(
+                "claude",
+                {
+                    "session": {"pct": 18, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly": {"pct": 11, "reset_at": "2026-07-26T16:00:00Z"},
+                    "weekly_fable": {"pct": 6, "reset_at": "2026-07-26T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "82/94·1p")
+
+    def test_render_provider_segment_fable_disabled_by_default(self) -> None:
+        with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False):
+            segment = MODULE.render_provider_segment(
+                "claude",
+                {
+                    "session": {"pct": 18, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly_fable": {"pct": 6, "reset_at": "2026-07-26T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "82·1p")
+
+    def test_render_provider_segment_fable_ignored_for_non_claude(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_FABLE": "on"},
+            clear=False,
+        ):
+            segment = MODULE.render_provider_segment(
+                "codex",
+                {
+                    "session": {"pct": 18, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly_fable": {"pct": 6, "reset_at": "2026-07-26T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "82·1p")
 
     def test_render_provider_segment_session_view_falls_back_to_weekly(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False):

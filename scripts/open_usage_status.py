@@ -49,6 +49,7 @@ CODEX_WEEKLY_WINDOW_SECONDS = 7 * 24 * 60 * 60
 PROVIDERS = ("claude", "codex")
 USAGE_VIEWS = ("session", "all")
 DEFAULT_USAGE_VIEW = "session"
+CLAUDE_FABLE_MODEL_NAME = "fable"
 MISSING_PROVIDER_SEGMENT = "-/-"
 MISSING_SESSION_SEGMENT = "-"
 STATUS_LINE_FG = "#5c5c5c"
@@ -108,6 +109,14 @@ def usage_view() -> str:
     if raw in USAGE_VIEWS:
         return raw
     return DEFAULT_USAGE_VIEW
+
+
+def env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "on", "yes", "true")
+
+
+def claude_fable_enabled() -> bool:
+    return env_flag("TMUX_OPEN_USAGE_CLAUDE_FABLE")
 
 
 def cache_dir() -> Path:
@@ -403,6 +412,31 @@ def refresh_claude_access_token(state: dict[str, Any]) -> str | None:
     return access_token
 
 
+def extract_claude_fable_weekly(data: dict[str, Any]) -> dict[str, Any] | None:
+    limits = data.get("limits")
+    if not isinstance(limits, list):
+        return None
+    for entry in limits:
+        if not isinstance(entry, dict):
+            continue
+        # session-scoped Fable limits, if they ever appear, are not weekly usage
+        if entry.get("group") not in ("weekly", None):
+            continue
+        scope = entry.get("scope")
+        model = scope.get("model") if isinstance(scope, dict) else None
+        name = model.get("display_name") if isinstance(model, dict) else None
+        if not isinstance(name, str) or name.strip().lower() != CLAUDE_FABLE_MODEL_NAME:
+            continue
+        pct = read_int(entry.get("percent"))
+        if pct is None:
+            continue
+        reset_at = entry.get("resets_at")
+        if reset_at is not None and parse_iso_datetime(reset_at) is None:
+            reset_at = None
+        return {"pct": pct, "reset_at": reset_at}
+    return None
+
+
 def normalize_claude_usage(data: Any) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
@@ -425,11 +459,17 @@ def normalize_claude_usage(data: Any) -> dict[str, Any] | None:
     if session_reset is None and weekly_reset is None:
         return None
 
-    return {
+    normalized: dict[str, Any] = {
         "provider": "claude",
         "session": {"pct": session_pct, "reset_at": session_reset},
         "weekly": {"pct": weekly_pct, "reset_at": weekly_reset},
     }
+
+    fable = extract_claude_fable_weekly(data)
+    if fable is not None:
+        normalized["weekly_fable"] = fable
+
+    return normalized
 
 
 def load_shared_claude_usage() -> dict[str, Any] | None:
@@ -878,13 +918,26 @@ def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
     return f"{math.ceil(seconds_left / 86400)}d"
 
 
+def claude_fable_suffix(provider: str, data: dict[str, Any]) -> str:
+    if provider != "claude" or not claude_fable_enabled():
+        return ""
+    fable = data.get("weekly_fable")
+    if not isinstance(fable, dict):
+        return ""
+    fable_left = remaining_percent(read_int(fable.get("pct")))
+    if fable_left is None:
+        return ""
+    return f"/{fable_left}"
+
+
 def render_provider_segment(provider: str, data: dict[str, Any], now: datetime | None = None) -> str | None:
     session = data.get("session")
     session_part: str | None = None
     if isinstance(session, dict):
         session_left = remaining_percent(read_int(session.get("pct")))
         if session_left is not None:
-            session_part = f"{session_left}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
+            fable_part = claude_fable_suffix(provider, data)
+            session_part = f"{session_left}{fable_part}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
 
     weekly = data.get("weekly")
     weekly_part: str | None = None

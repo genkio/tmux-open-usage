@@ -117,6 +117,18 @@ set -g @tmux_open_usage_view 'session'
 
 Unknown values fall back to `session`. Reload tmux after changing it.
 
+Show Claude's weekly Fable model quota next to the session number, default `off`:
+
+```tmux
+set -g @tmux_open_usage_claude_fable 'on'
+```
+
+- When enabled and the Claude usage API reports a weekly Fable limit, the session-left number gains a `/fable-left` suffix, for example `82·1a` becomes `82/94·1a`, where `94` means 94% of the weekly Fable quota is still left.
+- This only affects the Claude segment; Codex is unchanged.
+- If the API does not report a Fable limit, the suffix is omitted.
+
+Supported truthy values are `1`, `on`, `yes`, and `true`. Reload tmux after changing it.
+
 ## Install
 
 Public TPM install after publishing:
