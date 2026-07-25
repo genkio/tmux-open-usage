@@ -925,25 +925,27 @@ def format_days_until_reset(reset_at: Any, now: datetime | None = None) -> str:
     return f"{math.ceil(seconds_left / 86400)}d"
 
 
-def claude_fable_suffix(provider: str, data: dict[str, Any]) -> str:
+def claude_fable_left(provider: str, data: dict[str, Any]) -> int | None:
     if provider != "claude" or not claude_fable_enabled():
-        return ""
+        return None
     fable = data.get("weekly_fable")
     if not isinstance(fable, dict):
-        return ""
-    fable_left = remaining_percent(read_int(fable.get("pct")))
-    if fable_left is None:
-        return ""
-    return f"/{fable_left}"
+        return None
+    return remaining_percent(read_int(fable.get("pct")))
 
 
 def render_provider_segment(provider: str, data: dict[str, Any], now: datetime | None = None) -> str | None:
+    view = provider_usage_view(provider)
+    fable_left = claude_fable_left(provider, data)
+
     session = data.get("session")
     session_part: str | None = None
     if isinstance(session, dict):
         session_left = remaining_percent(read_int(session.get("pct")))
         if session_left is not None:
-            fable_part = claude_fable_suffix(provider, data)
+            # Fable is a weekly limit, so it only rides the session number when
+            # no weekly half is rendered to carry it.
+            fable_part = f"/{fable_left}" if fable_left is not None and view == "session" else ""
             session_part = f"{session_left}{fable_part}·{format_short_reset_clock(session.get('reset_at'), now=now)}"
 
     weekly = data.get("weekly")
@@ -951,9 +953,10 @@ def render_provider_segment(provider: str, data: dict[str, Any], now: datetime |
     if isinstance(weekly, dict):
         weekly_left = remaining_percent(read_int(weekly.get("pct")))
         if weekly_left is not None:
-            weekly_part = f"{weekly_left}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
+            fable_part = f"({fable_left})" if fable_left is not None else ""
+            weekly_part = f"{weekly_left}{fable_part}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
 
-    if provider_usage_view(provider) == "session":
+    if view == "session":
         return session_part or weekly_part
 
     if session_part is None and weekly_part is None:

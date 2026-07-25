@@ -134,7 +134,9 @@ Show Claude's weekly Fable model quota next to the session number, default `off`
 set -g @tmux_open_usage_claude_fable 'on'
 ```
 
-- When enabled and the Claude usage API reports a weekly Fable limit, the session-left number gains a `/fable-left` suffix, for example `82·1a` becomes `82/94·1a`, where `94` means 94% of the weekly Fable quota is still left.
+- Fable is a weekly limit, so it is rendered next to whichever number represents the week.
+- In the `session` view, the session-left number gains a `/fable-left` suffix, for example `82·1a` becomes `82/94·1a`, where `94` means 94% of the weekly Fable quota is still left.
+- In the `all` view, the weekly-left number gains a `(fable-left)` suffix instead, for example `82·1a/55·3d` becomes `82·1a/55(94)·3d`.
 - This only affects the Claude segment; Codex is unchanged.
 - If the API does not report a Fable limit, the suffix is omitted.
 

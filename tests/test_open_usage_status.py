@@ -658,6 +658,69 @@ class OpenUsageStatusTests(unittest.TestCase):
             )
         self.assertEqual(segment, "82/94·1p")
 
+    def test_render_provider_segment_all_view_puts_fable_on_weekly(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "all", "TMUX_OPEN_USAGE_CLAUDE_FABLE": "on"},
+            clear=False,
+        ):
+            segment = MODULE.render_provider_segment(
+                "claude",
+                {
+                    "session": {"pct": 13, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly": {"pct": 77, "reset_at": "2026-07-22T16:00:00Z"},
+                    "weekly_fable": {"pct": 82, "reset_at": "2026-07-22T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "87·1p/23(18)·2d")
+
+    def test_render_provider_segment_session_view_fallback_puts_fable_on_weekly(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_FABLE": "on"},
+            clear=False,
+        ):
+            segment = MODULE.render_provider_segment(
+                "claude",
+                {
+                    "weekly": {"pct": 77, "reset_at": "2026-07-22T16:00:00Z"},
+                    "weekly_fable": {"pct": 82, "reset_at": "2026-07-22T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "23(18)·2d")
+
+    def test_render_provider_segment_all_view_omits_fable_when_disabled(self) -> None:
+        with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "all"}, clear=False):
+            segment = MODULE.render_provider_segment(
+                "claude",
+                {
+                    "session": {"pct": 13, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly": {"pct": 77, "reset_at": "2026-07-22T16:00:00Z"},
+                    "weekly_fable": {"pct": 82, "reset_at": "2026-07-22T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "87·1p/23·2d")
+
+    def test_render_provider_segment_all_view_ignores_fable_for_non_claude(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "all", "TMUX_OPEN_USAGE_CLAUDE_FABLE": "on"},
+            clear=False,
+        ):
+            segment = MODULE.render_provider_segment(
+                "codex",
+                {
+                    "session": {"pct": 13, "reset_at": "2026-07-21T13:00:00Z"},
+                    "weekly": {"pct": 77, "reset_at": "2026-07-22T16:00:00Z"},
+                    "weekly_fable": {"pct": 82, "reset_at": "2026-07-22T16:00:00Z"},
+                },
+                now=datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "87·1p/23·2d")
+
     def test_render_provider_segment_fable_disabled_by_default(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False):
             segment = MODULE.render_provider_segment(
