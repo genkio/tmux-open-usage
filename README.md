@@ -11,7 +11,7 @@ When at least one provider is active, it shows, for each provider:
 - remaining 5-hour session quota with compact reset time
 - the selected providers in one compact text segment on the right side of row 1
 
-By default only the current 5-hour session is shown. Set `@tmux_open_usage_view` to `all` to also show the 7-day weekly quota.
+By default only the current 5-hour session is shown. Set `@tmux_open_usage_view` to `all` to also show the 7-day weekly quota, or `@tmux_open_usage_claude_view` / `@tmux_open_usage_codex_view` to pick a view per provider.
 
 Example output:
 
@@ -116,6 +116,17 @@ set -g @tmux_open_usage_view 'session'
 - `all` also appends the 7-day weekly quota, for example `82·1a/55·3d`.
 
 Unknown values fall back to `session`. Reload tmux after changing it.
+
+Per-provider view override, unset by default:
+
+```tmux
+set -g @tmux_open_usage_claude_view 'all'
+set -g @tmux_open_usage_codex_view 'session'
+```
+
+- Each option takes the same values as `@tmux_open_usage_view` and wins over it for that provider only.
+- Unknown or empty values fall back to `@tmux_open_usage_view`.
+- The gap between segments widens to two spaces as soon as any provider renders the `all` view.
 
 Show Claude's weekly Fable model quota next to the session number, default `off`:
 

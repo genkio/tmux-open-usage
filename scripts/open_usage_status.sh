@@ -27,6 +27,19 @@ if [[ -n "$view" ]]; then
   export TMUX_OPEN_USAGE_VIEW="$view"
 fi
 
+export_provider_view() {
+  local provider="$1"
+  local upper="$2"
+  local value
+  value="$(tmux show-option -gqv "@tmux_open_usage_${provider}_view" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    export "TMUX_OPEN_USAGE_${upper}_VIEW=$value"
+  fi
+}
+
+export_provider_view claude CLAUDE
+export_provider_view codex CODEX
+
 claude_fable="$(tmux show-option -gqv "$CLAUDE_FABLE_OPTION" 2>/dev/null || true)"
 if [[ -n "$claude_fable" ]]; then
   export TMUX_OPEN_USAGE_CLAUDE_FABLE="$claude_fable"

@@ -111,6 +111,13 @@ def usage_view() -> str:
     return DEFAULT_USAGE_VIEW
 
 
+def provider_usage_view(provider: str) -> str:
+    raw = os.environ.get(f"TMUX_OPEN_USAGE_{provider.upper()}_VIEW", "").strip().lower()
+    if raw in USAGE_VIEWS:
+        return raw
+    return usage_view()
+
+
 def env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in ("1", "on", "yes", "true")
 
@@ -946,7 +953,7 @@ def render_provider_segment(provider: str, data: dict[str, Any], now: datetime |
         if weekly_left is not None:
             weekly_part = f"{weekly_left}·{format_days_until_reset(weekly.get('reset_at'), now=now)}"
 
-    if usage_view() == "session":
+    if provider_usage_view(provider) == "session":
         return session_part or weekly_part
 
     if session_part is None and weekly_part is None:
@@ -968,17 +975,19 @@ def join_status_parts(parts: list[str], separator: str = "  ") -> str:
     return " " + separator.join(parts)
 
 
-def missing_provider_segment() -> str:
-    if usage_view() == "session":
+def missing_provider_segment(provider: str) -> str:
+    if provider_usage_view(provider) == "session":
         return MISSING_SESSION_SEGMENT
     return MISSING_PROVIDER_SEGMENT
 
 
 def render_status_line() -> str:
-    placeholder = missing_provider_segment()
-    separator = " " if usage_view() == "session" else "  "
+    providers = provider_order()
+    # a wider gap once any segment carries a weekly half, else segments blur together
+    separator = "  " if any(provider_usage_view(p) == "all" for p in providers) else " "
     parts: list[str] = []
-    for provider in provider_order():
+    for provider in providers:
+        placeholder = missing_provider_segment(provider)
         data = get_provider_status(provider)
         if not data:
             parts.append(style_provider_part(provider, placeholder))

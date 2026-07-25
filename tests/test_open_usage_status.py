@@ -348,6 +348,31 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "weekly"}, clear=False):
             self.assertEqual(MODULE.usage_view(), "session")
 
+    def test_provider_usage_view_falls_back_to_global_view(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "all", "TMUX_OPEN_USAGE_CLAUDE_VIEW": ""},
+            clear=False,
+        ):
+            self.assertEqual(MODULE.provider_usage_view("claude"), "all")
+
+    def test_provider_usage_view_overrides_global_view(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_VIEW": "all"},
+            clear=False,
+        ):
+            self.assertEqual(MODULE.provider_usage_view("claude"), "all")
+            self.assertEqual(MODULE.provider_usage_view("codex"), "session")
+
+    def test_provider_usage_view_ignores_unknown_value(self) -> None:
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_VIEW": "weekly"},
+            clear=False,
+        ):
+            self.assertEqual(MODULE.provider_usage_view("claude"), "session")
+
     def test_provider_order_auto_detects_available_providers(self) -> None:
         with (
             mock.patch.dict(MODULE.os.environ, {}, clear=False),
@@ -468,6 +493,46 @@ class OpenUsageStatusTests(unittest.TestCase):
             self.assertEqual(
                 MODULE.render_status_line(),
                 " #[fg=#E67E22]65·12p#[fg=#5c5c5c] #[fg=#10A37F]9·3p#[fg=#5c5c5c]",
+            )
+
+    def test_render_status_line_mixed_views_render_per_provider(self) -> None:
+        with (
+            mock.patch.dict(
+                MODULE.os.environ,
+                {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_VIEW": "all"},
+                clear=False,
+            ),
+            mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
+            mock.patch.object(
+                MODULE,
+                "get_provider_status",
+                side_effect=[
+                    {"session": {"pct": 18, "reset_at": "2026-03-09T01:10:00Z"}, "weekly": {"pct": 45, "reset_at": "2026-03-11T09:00:00Z"}},
+                    {"session": {"pct": 91, "reset_at": "2026-03-08T15:00:00Z"}, "weekly": {"pct": 10, "reset_at": "2026-03-15T09:00:00Z"}},
+                ],
+            ),
+            mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
+        ):
+            rendered = MODULE.render_status_line()
+        self.assertIn("82·", rendered)
+        self.assertIn("/55·", rendered)
+        self.assertIn("9·", rendered)
+        self.assertNotIn("90·", rendered)
+
+    def test_render_status_line_placeholder_follows_provider_view(self) -> None:
+        with (
+            mock.patch.dict(
+                MODULE.os.environ,
+                {"TMUX_OPEN_USAGE_VIEW": "session", "TMUX_OPEN_USAGE_CLAUDE_VIEW": "all"},
+                clear=False,
+            ),
+            mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
+            mock.patch.object(MODULE, "get_provider_status", return_value=None),
+            mock.patch.object(MODULE, "provider_fetch_failed", return_value=False),
+        ):
+            self.assertEqual(
+                MODULE.render_status_line(),
+                " #[fg=#E67E22]-/-#[fg=#5c5c5c]  #[fg=#10A37F]-#[fg=#5c5c5c]",
             )
 
     def test_render_status_line_greys_out_failed_provider(self) -> None:
