@@ -22,7 +22,7 @@ Example output:
 Format:
 
 ```text
- provider-segment  provider-segment
+ provider-segment provider-segment
 ```
 
 With one provider configured, it renders as:
@@ -50,7 +50,8 @@ With `@tmux_open_usage_view 'all'`, each segment gains a `/weekly-left·weekly-d
 - Claude Code data comes from the same OAuth usage endpoint your statusline script uses.
 - If direct Claude auth lookup is unavailable, the plugin can fall back to a shared Claude usage cache at `/tmp/claude_usage_cache.json` when it is recent enough.
 - Codex data comes from the ChatGPT CLI usage endpoint used in `openusage`.
-- When Codex returns only a weekly window, the default session view falls back to that available quota and renders its reset in days, for example `83·6d`.
+- Codex windows are slotted by `limit_window_seconds`, not by their position in the response: anything up to 24 hours is the session half, anything longer is the weekly half. Codex has both moved the 5-hour window between `primary_window` and `secondary_window` and dropped it entirely, so the segment follows whatever it currently reports.
+- When Codex returns only a weekly window, the session view falls back to that available quota and renders its reset in days, for example `83·6d`, while the `all` view leaves the session half as `-`.
 - Auto-detection only uses real auth sources such as OAuth tokens, auth files, or keychain entries. Generic config files do not enable a provider by default.
 - Auto-detection runs when the plugin loads or tmux config is reloaded. If no provider is available at that moment, the segment is not attached to `status-right`.
 - Once attached, provider selection is evaluated again each time the status command runs. If you log into Claude Code or Codex after tmux is already running and the segment was not attached yet, reload tmux config to attach it.
@@ -126,7 +127,7 @@ set -g @tmux_open_usage_codex_view 'session'
 
 - Each option takes the same values as `@tmux_open_usage_view` and wins over it for that provider only.
 - Unknown or empty values fall back to `@tmux_open_usage_view`.
-- The gap between segments widens to two spaces as soon as any provider renders the `all` view.
+- Segments are always separated by a single space; the per-provider color keeps them apart.
 
 Show Claude's weekly Fable model quota next to the session number, default `off`:
 

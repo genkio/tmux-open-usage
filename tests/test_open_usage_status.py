@@ -306,6 +306,72 @@ class OpenUsageStatusTests(unittest.TestCase):
             },
         )
 
+    def test_normalize_codex_usage_slots_windows_by_length(self) -> None:
+        payload = {
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 6,
+                    "limit_window_seconds": 18000,
+                    "reset_at": 1772982000,
+                },
+                "secondary_window": {
+                    "used_percent": 24,
+                    "limit_window_seconds": 604800,
+                    "reset_at": 1773241200,
+                },
+            }
+        }
+        self.assertEqual(
+            MODULE.normalize_codex_usage(payload, now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)),
+            {
+                "provider": "codex",
+                "session": {"pct": 6, "reset_at": "2026-03-08T15:00:00Z"},
+                "weekly": {"pct": 24, "reset_at": "2026-03-11T15:00:00Z"},
+            },
+        )
+
+    def test_normalize_codex_usage_slots_swapped_windows_by_length(self) -> None:
+        payload = {
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 24,
+                    "limit_window_seconds": 604800,
+                    "reset_at": 1773241200,
+                },
+                "secondary_window": {
+                    "used_percent": 6,
+                    "limit_window_seconds": 18000,
+                    "reset_at": 1772982000,
+                },
+            }
+        }
+        self.assertEqual(
+            MODULE.normalize_codex_usage(payload, now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)),
+            {
+                "provider": "codex",
+                "weekly": {"pct": 24, "reset_at": "2026-03-11T15:00:00Z"},
+                "session": {"pct": 6, "reset_at": "2026-03-08T15:00:00Z"},
+            },
+        )
+
+    def test_normalize_codex_usage_rejects_window_without_reset(self) -> None:
+        payload = {
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 24,
+                    "limit_window_seconds": 604800,
+                    "reset_at": 1773241200,
+                },
+                "secondary_window": {
+                    "used_percent": 6,
+                    "limit_window_seconds": 18000,
+                },
+            }
+        }
+        self.assertIsNone(
+            MODULE.normalize_codex_usage(payload, now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)),
+        )
+
     def test_format_short_reset_clock(self) -> None:
         now = datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc)
         self.assertEqual(MODULE.format_short_reset_clock("2026-03-08T15:20:00Z", now=now), "3p")
@@ -430,11 +496,11 @@ class OpenUsageStatusTests(unittest.TestCase):
     def test_join_status_parts(self) -> None:
         self.assertEqual(
             MODULE.join_status_parts(["82·1a/55·3d", "23·10p/90·5d"]),
-            " 82·1a/55·3d  23·10p/90·5d",
+            " 82·1a/55·3d 23·10p/90·5d",
         )
 
     def test_join_status_parts_uses_custom_separator(self) -> None:
-        self.assertEqual(MODULE.join_status_parts(["65·12p", "9·3p"], " "), " 65·12p 9·3p")
+        self.assertEqual(MODULE.join_status_parts(["65·12p", "9·3p"], "  "), " 65·12p  9·3p")
 
     def test_join_status_parts_with_single_provider_has_no_separator(self) -> None:
         self.assertEqual(MODULE.join_status_parts(["82·1a/55·3d"]), " 82·1a/55·3d")
@@ -456,7 +522,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=#E67E22]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]-/-#[fg=#5c5c5c]",
+                " #[fg=#E67E22]82·1a/55·3d#[fg=#5c5c5c] #[fg=#10A37F]-/-#[fg=#5c5c5c]",
             )
 
     def test_render_status_line_single_missing_provider_has_no_separator(self) -> None:
@@ -475,7 +541,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         with mock.patch.object(MODULE, "provider_order", return_value=[]):
             self.assertEqual(MODULE.render_status_line(), "")
 
-    def test_render_status_line_session_view_uses_single_space_separator(self) -> None:
+    def test_render_status_line_uses_single_space_separator(self) -> None:
         with (
             mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False),
             mock.patch.object(MODULE, "provider_order", return_value=["claude", "codex"]),
@@ -532,7 +598,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=#E67E22]-/-#[fg=#5c5c5c]  #[fg=#10A37F]-#[fg=#5c5c5c]",
+                " #[fg=#E67E22]-/-#[fg=#5c5c5c] #[fg=#10A37F]-#[fg=#5c5c5c]",
             )
 
     def test_render_status_line_greys_out_failed_provider(self) -> None:
@@ -552,7 +618,7 @@ class OpenUsageStatusTests(unittest.TestCase):
         ):
             self.assertEqual(
                 MODULE.render_status_line(),
-                " #[fg=#5c5c5c]82·1a/55·3d#[fg=#5c5c5c]  #[fg=#10A37F]23·10p/90·5d#[fg=#5c5c5c]",
+                " #[fg=#5c5c5c]82·1a/55·3d#[fg=#5c5c5c] #[fg=#10A37F]23·10p/90·5d#[fg=#5c5c5c]",
             )
 
     def test_refresh_provider_cache_keeps_failure_flag_until_fresh_success(self) -> None:
@@ -631,6 +697,15 @@ class OpenUsageStatusTests(unittest.TestCase):
                 now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
             )
         self.assertEqual(segment, "91·3p/69·3d")
+
+    def test_render_provider_segment_all_view_dashes_missing_session(self) -> None:
+        with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_CODEX_VIEW": "all"}, clear=False):
+            segment = MODULE.render_provider_segment(
+                "codex",
+                {"weekly": {"pct": 2, "reset_at": "2026-03-15T15:20:00Z"}},
+                now=datetime(2026, 3, 8, 9, 0, tzinfo=timezone.utc),
+            )
+        self.assertEqual(segment, "-/98·8d")
 
     def test_render_provider_segment_session_only_ignores_missing_weekly(self) -> None:
         with mock.patch.dict(MODULE.os.environ, {"TMUX_OPEN_USAGE_VIEW": "session"}, clear=False):

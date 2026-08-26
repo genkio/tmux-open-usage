@@ -44,7 +44,11 @@ CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 CODEX_REFRESH_URL = "https://auth.openai.com/oauth/token"
 CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_REFRESH_AGE_SECONDS = 8 * 24 * 60 * 60
-CODEX_WEEKLY_WINDOW_SECONDS = 7 * 24 * 60 * 60
+CODEX_SESSION_WINDOW_MAX_SECONDS = 24 * 60 * 60
+CODEX_WINDOW_SOURCES = (
+    ("primary_window", "x-codex-primary-used-percent", "session"),
+    ("secondary_window", "x-codex-secondary-used-percent", "weekly"),
+)
 
 PROVIDERS = ("claude", "codex")
 USAGE_VIEWS = ("session", "all")
@@ -631,6 +635,15 @@ def codex_reset_iso(window: Any, now: datetime) -> str | None:
     return None
 
 
+def codex_window_slot(window: dict[str, Any], positional_slot: str) -> str:
+    # Codex has moved the 5-hour window between primary and secondary before, and
+    # dropped it entirely for a while, so trust the window length over its position.
+    seconds = read_int(window.get("limit_window_seconds"))
+    if seconds is None:
+        return positional_slot
+    return "session" if seconds <= CODEX_SESSION_WINDOW_MAX_SECONDS else "weekly"
+
+
 def normalize_codex_usage(data: Any, headers: dict[str, str] | None = None, now: datetime | None = None) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
@@ -641,35 +654,24 @@ def normalize_codex_usage(data: Any, headers: dict[str, str] | None = None, now:
     if not isinstance(rate_limit, dict):
         return None
 
-    primary = rate_limit.get("primary_window")
-    secondary = rate_limit.get("secondary_window")
-    if not isinstance(primary, dict):
+    if not isinstance(rate_limit.get("primary_window"), dict):
         return None
 
-    session_pct = read_int(headers.get("x-codex-primary-used-percent"))
-    if session_pct is None:
-        session_pct = read_int(primary.get("used_percent"))
-    session_reset = codex_reset_iso(primary, now)
-    if session_pct is None or not session_reset:
-        return None
-
-    normalized: dict[str, Any] = {
-        "provider": "codex",
-        "session": {"pct": session_pct, "reset_at": session_reset},
-    }
-
-    if isinstance(secondary, dict):
-        weekly_pct = read_int(headers.get("x-codex-secondary-used-percent"))
-        if weekly_pct is None:
-            weekly_pct = read_int(secondary.get("used_percent"))
-        weekly_reset = codex_reset_iso(secondary, now)
-        if weekly_pct is None or not weekly_reset:
+    normalized: dict[str, Any] = {"provider": "codex"}
+    for key, header, positional_slot in CODEX_WINDOW_SOURCES:
+        window = rate_limit.get(key)
+        if not isinstance(window, dict):
+            continue
+        pct = read_int(headers.get(header))
+        if pct is None:
+            pct = read_int(window.get("used_percent"))
+        reset_at = codex_reset_iso(window, now)
+        if pct is None or not reset_at:
             return None
-        normalized["weekly"] = {"pct": weekly_pct, "reset_at": weekly_reset}
-        return normalized
+        normalized.setdefault(codex_window_slot(window, positional_slot), {"pct": pct, "reset_at": reset_at})
 
-    if read_int(primary.get("limit_window_seconds")) == CODEX_WEEKLY_WINDOW_SECONDS:
-        normalized["weekly"] = normalized.pop("session")
+    if len(normalized) == 1:
+        return None
     return normalized
 
 
@@ -972,7 +974,7 @@ def style_provider_part(provider: str, part: str) -> str:
     return f"#[fg={color}]{part}#[fg={STATUS_LINE_FG}]"
 
 
-def join_status_parts(parts: list[str], separator: str = "  ") -> str:
+def join_status_parts(parts: list[str], separator: str = " ") -> str:
     if not parts:
         return ""
     return " " + separator.join(parts)
@@ -986,8 +988,6 @@ def missing_provider_segment(provider: str) -> str:
 
 def render_status_line() -> str:
     providers = provider_order()
-    # a wider gap once any segment carries a weekly half, else segments blur together
-    separator = "  " if any(provider_usage_view(p) == "all" for p in providers) else " "
     parts: list[str] = []
     for provider in providers:
         placeholder = missing_provider_segment(provider)
@@ -997,7 +997,7 @@ def render_status_line() -> str:
             continue
         part = render_provider_segment(provider, data)
         parts.append(style_provider_part(provider, part if part else placeholder))
-    return join_status_parts(parts, separator)
+    return join_status_parts(parts)
 
 
 def main(argv: list[str]) -> int:
